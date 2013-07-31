@@ -39,12 +39,17 @@ class StatusBox():
         
         self.object_id=None
 
-        self.text=None
+        self._text=None
 
-    def set_text(self, text):
-        debug2('StatusBox.set_text: {}'.format(text))
+    @property
+    def text(self):
+        return self._text
+
+    @text.setter
+    def text(self, text):
         self.clear()
-        self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=('Arial', 12), fill="black", anchor="nw", justify="left")
+        if text:
+            self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=('Arial', 12), fill="black", anchor="nw", justify="left")
 
     def clear(self):
         debug2('StatusBox.clear')

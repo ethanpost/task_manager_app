@@ -1,6 +1,7 @@
 __author__ = 'Ethan_Post'
 
 import os
+import re
 import sys
 import shutil
 import string
@@ -8,7 +9,7 @@ import random
 import shelve
 import copy
 from debug import *
-from datetime import *
+import datetime
 import subprocess
 from PIL import ImageTk, Image, ImageOps
 
@@ -95,11 +96,29 @@ def sublime (file):
 def run_program (program_path=None, file_path=None):
     process = subprocess.Popen([program_path, file_path], shell=True)
 
-def to_char (t=datetime.now(), f='%H:%M'):
+def get_valid_folder_name_from_string(string):
+    debug('bin.get_valid_folder_name_from_string: string={}'.format(string))
+    return re.sub(r"[\/\\\:\*\?\"\<\>\|]", "", string)
+
+def to_char (t=datetime.datetime.now(), f='%H:%M'):
     """Return a string from a date using the format specified."""
     #f='%c'
     #f='%a %b %d %I:%M %p'
-    return datetime.strftime(t, f)
+    return datetime.datetime.strftime(t, f)
+
+def date_to_string (datetime=datetime.datetime.now(), format='YYYY_MM_DD_HH24_MI_SS'):
+    """
+    Return a string from a date using the format specified.
+    """
+    format=re.sub('YYYY', '%Y', format)
+    format=re.sub('MM', '%m', format)
+    format=re.sub('MON', '%b', format)
+    format=re.sub('MONTH', '%B', format)
+    format=re.sub('DD', '%d', format)
+    format=re.sub('HH24', '%H', format)
+    format=re.sub('MI', '%M', format)
+    format=re.sub('SS', '%S', format)
+    return datetime.datetime.strftime(datetime, format)
 
 def mkdir(directory):
     if not os.path.exists(directory):
