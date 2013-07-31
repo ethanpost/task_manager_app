@@ -1,4 +1,4 @@
-__author__ = 'Ethan_Post'
+
 
 import tkinter as tk
 import re
@@ -10,18 +10,121 @@ import statusbox
 import modalinputbox
 import filebar
 import datetime
+import theme
 
-def get_timeline_item_options_template ():
-    template="""
+class ItemForm():
+    def __init__(self, root, theme, item):
+        self.form=tk.Toplevel(root)
+        self.theme=theme
+        self._status_doc='<Enter Status or #Milestone>'
+        self.widget_width=75
+        self.item=item
+        self._draw()
 
-# List of folders to display in the file bar. Separate each folder with a comma.
-# folders=C:\temp, D:\temp\foo
+    def _enable_title(self, event):
+        self.title_box.configure(state=tk.NORMAL)
+        self.title_box.focus_set()
 
-# List of files to display in the file bar. Separate each file with a comma.
-# files=C:\temp\foo.txt, C:\temp\random.doc
+    def _status_keypress(self, event):
+        debug('ItemForm._item_form_update_status_history: {0} {1}'.format(event.state, event.keycode))
+        if event.state==8 and event.keycode==13:
+            # Enter Key
+            if self.status_var.get() not in ('', self._status_doc):
+                self.history_box.configure(state=tk.NORMAL)
+                self.item.status=self.status_var.get()
+                self.history_box.insert(1.0, self.item.status_history[0]+'\n')
+                self.status_var.set('')
+                self.history_box.configure(state=tk.DISABLED)
+        elif event.state==8 and event.keycode==27:
+            # Escape Key
+            self.status_var.set(self._status_doc)
+            self.history_box.configure(state=tk.DISABLED)
 
-"""
-    return template
+    def _update_title(self, event):
+        if event.state==8 and event.keycode==13:
+            self.item.title=self.title_var.get()
+            self.title_box.configure(state=tk.DISABLED)
+
+    def _update_tags(self, event):
+        if event.state==8 and event.keycode==13:
+            debug('update_tags')
+            self.item.tags=self.tags_var.get().split(',')
+
+    def _draw(self):
+
+        item=self.item
+
+        # Title
+        title_frame=tk.Frame(self.form)
+        title_frame.pack(fill=tk.X, padx=2, pady=2)
+        self.title_var=tk.StringVar()
+        self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
+                                width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
+        self.title_box.pack(fill=tk.X)
+        self.title_box.bind('<Double-1>', self._enable_title)
+        self.title_box.bind('<Key>', self._update_title)
+        self.title_var.set(self.item.title)
+        self.form.title(item.title)
+        self.title_box.configure(state=tk.DISABLED)
+
+        line=tk.Frame(self.form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
+        line.pack(fill=tk.X)
+
+        # Status
+        status_frame=tk.Frame(self.form)
+        status_frame.pack(fill=tk.X, padx=2, pady=2)
+        self.status_var=tk.StringVar()
+        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
+                                 width=self.widget_width, textvariable=self.status_var)
+        self.status_box.pack(fill=tk.X)
+        self.status_box.bind('<Key>', self._status_keypress)
+        self.status_var.set(self._status_doc)
+        self.status_box.focus_set()
+        self.status_box.select_range(0, tk.END)
+
+        # Status history.
+        history_frame=tk.Frame(self.form)
+        history_frame.pack(fill=tk.X, padx=2, pady=2)
+        if len(self.item.status_history) <= 6:
+            history_box_height=3
+        else:
+            history_box_height=6
+
+        self.history_box=tk.Text(history_frame, height=history_box_height, borderwidth=1, font=self.theme.font(),
+                                 relief=tk.FLAT, width=self.widget_width, fg='dark grey')
+        self.history_box.pack(side=tk.LEFT, fill=tk.X)
+
+        for text in item.status_history:
+            self.history_box.insert(tk.END, text+'\n')
+
+        history_bar=tk.Scrollbar(history_frame)
+        history_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.history_box.configure(yscrollcommand=history_bar.set)
+        history_bar.configure(command=self.history_box.yview)
+
+        self.history_box.configure(state=tk.DISABLED)
+
+        # Tags
+        tags_frame=tk.Frame(self.form)
+        tags_frame.pack(fill=tk.X, padx=2, pady=2)
+        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(), anchor="w", width="10", relief=tk.FLAT, fg='black')
+        tags_label.pack(fill=tk.X)
+        self.tags_var=tk.StringVar()
+        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='>'), relief=tk.FLAT, width=self.widget_width,
+                          textvariable=self.tags_var)
+        self.tags_box.pack(fill=tk.X)
+        self.tags_box.bind('<Key>', self._update_tags)
+        self.tags_var.set(','.join(self.item.tags))
+
+        canvas_frame=tk.Frame(self.form)
+        canvas_frame.pack(fill=tk.X, padx=2, pady=2)
+        canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
+        canvas.pack(fill=tk.X)
+
+        f=filebar.FileBar(root=self.form, canvas=canvas, height=60)
+        debug('folder={}'.format(item.folder))
+        f.add_folder(directory=item.folder.replace('\\', '\\\\'))
+        f.draw()
 
 class Item():
     def __init__(self):
@@ -193,40 +296,9 @@ class Timeline():
 
         self.root=kwargs['root']
         self.canvas=kwargs['canvas']
+        self.theme=theme.Theme()
 
-        self.schemes={}
-
-        self.schemes['default']={
-            'name':'default',
-            'background-color':'white',
-            'line-color':'dark grey',
-            'font-color':'black',
-            'item-color':'blue',
-            'item-outline-color': 'black',
-            'item-active-fill':'white',
-            'middle-line-color':'blue',
-            'current-time-color': 'red',
-            'font': ("Arial", 11),
-            'label-font': ("Arial", 8),
-            'item-size': 10
-        }
-
-        self.schemes['disabled']={
-            'name':'disabled',
-            'background-color':'white',
-            'line-color':'light grey',
-            'font-color':'dark grey',
-            'item-color':'blue',
-            'item-outline-color': 'white',
-            'item-active-fill':'white',
-            'middle-line-color':'white',
-            'current-time-color': 'white',
-            'font': ("Arial", 11),
-            'item-size': 10,
-            'label-font': ("Arial", 8),
-        }
-
-        self.scheme=self.schemes['default']
+        self.item_label_display_int=0
 
         if 'keyboard' in kwargs.keys():
             self.keyboard=kwargs['keyboard']
@@ -266,9 +338,6 @@ class Timeline():
 
         self.x=0
         self.y=0
-        
-        # Possible values are none, name, status
-        self._item_label_display_state='none'
 
         # Stores information during drag and drop operations.
         self._dragging={}
@@ -399,15 +468,10 @@ class Timeline():
 
                 size=item.size*{'hourly': 1, 'daily': .8, 'monthly': .8*.8}[timeline['name']]
 
-                if self.scheme['name']=='disabled':
-                    item_color=self.scheme['item-color']
-                else:
-                    item_color='blue'
-
                 x=bin.days_between_two_dates(item.datetime, timeline['begin_time'])/timeline['total_days']*self.width
                 y=timeline['y']+(timeline['height']*item.y_as_pct_of_height)
                 if item.shape=='rectangle':
-                    item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill=item_color, outline='black', tags=item_tags, stipple=None, activefill='black')
+                    item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill='green', outline='black', tags=item_tags, stipple=None, activefill='black')
                 elif item.image_path:
                     thumb_key='{0}_{1}'.format(item.key, timeline['name'])
                     # ToDo: Iterator here?
@@ -421,13 +485,23 @@ class Timeline():
 
                 # Draw labels for hourly timeline.
                 # ToDo: This is going to break for images.
-                if (timeline['name']=="hourly" and self._item_label_display_state != 'none'):
-                    if self._item_label_display_state=='title':
+                if timeline['name']=="hourly":
+                    
+                    if   self.item_label_display_int==0:
+                        display_text=''
+                    elif self.item_label_display_int==1:
                         display_text=item.title
-                    else:
-                        display_text='[' + item.status + ']'
+                    elif self.item_label_display_int==2:
+                        display_text='{0}@{1}'.format(item.tags[0], item.title)
+                    elif self.item_label_display_int==3:
+                        display_text='{}'.format(item.status)
+                    elif self.item_label_display_int==4:
+                        display_text='{0}@{1}'.format(item.tags[0], item.status)
+                    elif self.item_label_display_int==5:
+                        display_text='{0}@{1} <{2}>'.format(item.tags[0], item.title, item.status)
+
                     x,y,right,bottom=self.canvas.coords(item.object_id)
-                    object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=("Arial", 8), fill="black", tags=label_tags, anchor="nw", justify="left")
+                    object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
         object_id=self.canvas.find_closest(x, y, start=start)[0]
@@ -448,19 +522,6 @@ class Timeline():
     def _get_item_key_from_object_id(self, object_id):
         debug('Timeline._get_item_key_from_object_id')
         return self._map_object_id_to_item_key[object_id]
-
-
-    def _get_status_text(self, item):
-       if item.status:
-           return '[{}]'.format(item.status)
-       else:
-           return None
-
-    def _get_title_and_status_text(self, item):
-       if item.status:
-           return '{0} [{1}]'.format(item.title, item.status)
-       else:
-           return item.title
 
     def _get_time_from_xy(self, x, y):
         debug('Timeline._get_time_from_item')
@@ -486,16 +547,11 @@ class Timeline():
     
     def keypress(self, dict):
         debug('Timeline.keypress: {}'.format(dict))
-        
         # F1 key press
         if dict['state']==8 and dict['keycode']==112:
-            map={
-                'none':'title',
-                'title':'status',
-                'status':'none'
-            }
-            self._item_label_display_state=map[self._item_label_display_state]
-
+            self.item_label_display_int+=1
+            if self.item_label_display_int > 4:
+                self.item_label_display_int=0
             # ToDo: To speed performance up here I cold just draw the hourly items.
             self.draw_items()
         
@@ -528,12 +584,18 @@ class Timeline():
                 item=self.items.get_by_key(key)
                 text=None
                 if time and key:
-                    if self._item_label_display_state=='none':
-                        text=self._get_title_and_status_text(item)
-                    elif self._item_label_display_state=='title':
-                        text=self._get_status_text(item)
-                    elif self._item_label_display_state=='status':
+
+                    if self.item_label_display_int==0:
+                        text=''
+                    elif self.item_label_display_int==1:
                         text=item.title
+                    elif self.item_label_display_int==2:
+                        text='{0}@{1}'.format(item.tags[0], item.title)
+                    elif self.item_label_display_int==3:
+                        '[{}]'.format(item.status)
+                    elif self.item_label_display_int==4:
+                        text='{0}@{1}'.format(item.tags[0], item.status)
+
                     self._display_time_with_text(time, text)
                 else:
                     debug('No coord time!')
@@ -597,78 +659,12 @@ class Timeline():
         object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
         key=self._get_item_key_from_object_id(object_id)
         item=self.items.get_by_key(key)
-        self.open_form_for_item(key)
-        self.canvas.focus_force()
+        f=ItemForm(root=self.root, theme=self.theme, item=item)
+        #self.open_form_for_item(key)
+        #self.canvas.focus_force()
 
-    def open_form_for_item(self, key):
-
-        item=item=self.items.get_by_key(key)
-
-        form=tk.Toplevel(self.root)
-
-        width=75
-
-        # Title
-        title_frame=tk.Frame(form)
-        title_frame.pack(fill=tk.X, padx=2, pady=2)
-        title_box=tk.Entry(title_frame, borderwidth=1, relief=tk.FLAT, width=width, disabledforeground='black')
-        title_box.pack(fill=tk.X)
-        title_box.insert(0, item.title)
-        form.title(item.title)
-        title_box.configure(state=tk.DISABLED)
-
-        linebreak=tk.Frame(form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
-        linebreak.pack(fill=tk.X)
-
-        # Status
-        status_frame=tk.Frame(form)
-        status_frame.pack(fill=tk.X, padx=2, pady=2)
-        status_box=tk.Entry(status_frame, borderwidth=1, relief=tk.FLAT, width=width)
-        status_box.pack(fill=tk.X)
-        status_box.insert(0, '<Enter Status or #Milestone>')
-
-        # Status history.
-        history_frame=tk.Frame(form)
-        history_frame.pack(fill=tk.X, padx=2, pady=2)
-        if len(item.status_history) <= 6:
-            history_box_height=3
-            history_scrollbar=False
-        else:
-            history_box_height=6
-            history_scrollbar=True
-
-        history_box=tk.Text(history_frame, height=history_box_height, borderwidth=1, relief=tk.FLAT, width=width, fg='dark grey')
-        history_box.pack(side=tk.LEFT, fill=tk.X)
-
-        for text in item.status_history:
-            history_box.insert(tk.END, text+'\n')
-
-        if history_scrollbar:
-            history_scrollbar=tk.Scrollbar(history_frame)
-            history_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-            history_box.configure(yscrollcommand=history_scrollbar.set)
-            history_scrollbar.configure(command=history_box.yview)
-
-        history_box.configure(state=tk.DISABLED)
-
-        # Tags
-        tags_frame=tk.Frame(form)
-        tags_frame.pack(fill=tk.X, padx=2, pady=2)
-        tags_label=tk.Label(tags_frame, text='Tags', anchor="w", width="10", relief=tk.FLAT, fg='black')
-        tags_label.pack(fill=tk.X)
-        tags_box=tk.Entry(tags_frame, borderwidth=2, relief=tk.FLAT, width=width)
-        tags_box.pack(fill=tk.X)
-        tags_box.insert(0, ','.join(item.tags))
-
-        canvas_frame=tk.Frame(form)
-        canvas_frame.pack(fill=tk.X, padx=2, pady=2)
-        canvas=tk.Canvas(canvas_frame, width=width, height=60, bg='white')
-        canvas.pack(fill=tk.X)
-
-        f=filebar.FileBar(root=form, canvas=canvas, height=60)
-        debug('folder={}'.format(item.folder))
-        f.add_folder(directory=item.folder.replace('\\', '\\\\'))
-        f.draw()
+    def test(self, event):
+        debug('Timeline.test')
 
     def _open_item_rename_form(self):
         debug('_rename_item')
@@ -739,7 +735,7 @@ class Timeline():
             self.menu.post(x+15, y)
 
     def _timeline_mouse_click(self, event):
-        debug('_timeline_mouse_click')
+        debug('Timeline._timeline_mouse_click')
         # Determine which timeline was clicked on.
         t=self._get_timeline_from_xy(event.x, event.y)
 
@@ -763,7 +759,9 @@ class Timeline():
     def _timeline_mouse_click_add_item(self, x, y):
         timeline=self._get_timeline_from_xy(x, y)
         if timeline:
-            self._timelines_disable()
+            self.theme.enabled=False
+            self._timelines_draw()
+            self.draw_items()
             form=modalinputbox.ModalInputBox(
                 root=self.root,
                 canvas=self.canvas,
@@ -777,7 +775,9 @@ class Timeline():
                 self.draw_item(new_item)
                 if self.cbfunc:
                     self.cbfunc({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items[key]})
-            self._timelines_enable()
+            self.theme.enabled=True
+            self._timelines_draw()
+            self.draw_items()
             self.canvas.focus_force()
 
     def _timeline_mouse_doubleclick(self, event):
@@ -835,23 +835,24 @@ class Timeline():
             t['bottom']=t['y']+t['height']
             t['center_x']=self.x+(self.width/2)
             t['center_y']=t['y']+(t['height']/2)
-            object_id=self.canvas.create_rectangle(self.x, t['y'], t['right'], t['bottom'], fill=self.scheme['background-color'], outline=self.scheme['line-color'], tags="timelines")
+            object_id=self.canvas.create_rectangle(self.x, t['y'], t['right'], t['bottom'], fill=self.theme.background_color, outline=self.theme.line_color, tags="timelines")
             self.canvas.tag_lower(object_id)
         self._timelines_draw_details()
 
     def _timelines_draw_details(self):
-        debug2('_timelines_draw_details')
+        debug2('Timeline._timelines_draw_details')
         self.canvas.delete("timeline_detail")
         # Recalculate the time of first label for each timeline using current begin_time.
         self._set_first_label_time()
         for t in self.timelines:
+            font_size={'hourly':'<<', 'daily': '<<', 'monthly': '<<'}[t['name']]
             t['end_time']=t['begin_time']+datetime.timedelta(days=t['total_days'])
             x=self._get_x_from_time(t['first_label'], t['begin_time'], t['total_days'], self.width)
             label_time=t['first_label']
             for i in range(1,100):
                 l=bin.to_char(label_time, t['label_format'])
-                self.canvas.create_line(x, t['y'], x, t['bottom'], fill=self.scheme['line-color'], tags="timeline_detail")
-                self.canvas.create_text(x+1,t['bottom']-8, font=self.scheme['label-font'], text=l, anchor="w", fill=self.scheme['font-color'], tags="timeline_detail")
+                self.canvas.create_line(x, t['y'], x, t['bottom'], fill=self.theme.line_color, tags="timeline_detail")
+                self.canvas.create_text(x+3,t['bottom']-8, font=self.theme.font(size=font_size), text=l, anchor="w", fill=self.theme.font_color, tags="timeline_detail")
                 if t['name']=='hourly':
                     label_time=label_time+datetime.timedelta(hours=1)
                 elif t['name']=='daily':
@@ -864,18 +865,8 @@ class Timeline():
 
             # Draw red line in middle of timeline.
             x=self._get_x_from_time(t['begin_time']+datetime.timedelta(days=t['total_days']/2), t['begin_time'], t['total_days'], self.width)
-            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill=self.scheme['middle-line-color'], tags="timeline_detail")
+            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='red', tags="timeline_detail")
 
             # Draw blue line at current time.
             x=self._get_x_from_time(datetime.datetime.now(), t['begin_time'], t['total_days'], self.width)
-            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill=self.scheme['current-time-color'], tags="timeline_detail")
-
-    def _timelines_disable(self):
-        self.scheme=self.schemes['disabled']
-        self._timelines_draw()
-        self.draw_items()
-
-    def _timelines_enable(self):
-        self.scheme=self.schemes['default']
-        self._timelines_draw()
-        self.draw_items()
+            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='blue', tags="timeline_detail")
