@@ -94,7 +94,7 @@ class FileBar():
 
     def clear(self):
         debug('FileBar.clear')
-        self.canvas.delete_by_key('FileBarFile')
+        self.canvas.delete('FileBarFile')
         self.objects={}
         self.x=self.original_x
         self._object_id_of_first_file=None

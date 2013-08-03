@@ -15,20 +15,49 @@ import theme
 class ItemForm():
     def __init__(self, root, theme, item):
         self.form=tk.Toplevel(root)
+        self.form.bind_class("Text","<Control-a>", self.select_all)
+        self.form.bind_class("Entry","<Control-a>", self.select_all)
         self.theme=theme
         self._status_doc='<Enter Status or #Milestone>'
+        self._description_doc='<Enter Description>'
         self.widget_width=75
         self.item=item
         self._draw()
 
+    def select_all(self, event):
+        if event.widget.widgetName=='entry':
+            event.widget.select_range(0, tk.END)
+        else:
+            event.widget.tag_add("sel","1.0","end")
+
+    def _enable_description(self):
+        self.description_box.configure(state=tk.NORMAL)
+
     def _enable_title(self, event):
         self.title_box.configure(state=tk.NORMAL)
         self.title_box.focus_set()
+        self._pack_description()
+        if self.item.description is None:
+            self._enable_description()
 
-    def _status_keypress(self, event):
+    def _disable_description(self):
+        self.description_box.configure(state=tk.DISABLED)
+
+    def _disable_title(self):
+        self.title_box.configure(state=tk.DISABLED)
+
+    def _unpack_description(self):
+        self.description_box.pack_forget()
+        self.description_bar.pack_forget()
+        
+    def _pack_description(self):
+        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.description_box.pack(side=tk.TOP, fill=tk.X)
+
+    def _keypress_status(self, event):
         debug('ItemForm._item_form_update_status_history: {0} {1}'.format(event.state, event.keycode))
         if event.state==8 and event.keycode==13:
-            # Enter Key
+            # Enter
             if self.status_var.get() not in ('', self._status_doc):
                 self.history_box.configure(state=tk.NORMAL)
                 self.item.status=self.status_var.get()
@@ -36,23 +65,98 @@ class ItemForm():
                 self.status_var.set('')
                 self.history_box.configure(state=tk.DISABLED)
         elif event.state==8 and event.keycode==27:
-            # Escape Key
-            self.status_var.set(self._status_doc)
-            self.history_box.configure(state=tk.DISABLED)
+            # Escape
+            self._close_form()
 
-    def _update_title(self, event):
+    def _keypress_title(self, event):
+        debug('ItemForm._keypress_title: state={0} keycode={1}'.format(event.state, event.keycode))
         if event.state==8 and event.keycode==13:
+            # Enter
             self.item.title=self.title_var.get()
             self.title_box.configure(state=tk.DISABLED)
+        elif event.state==8 and event.keycode==27:
+            # Escape
+            self.title_var.set(self.item.title)
+            self._select_all_title()
+
+    def _keypress_description(self, event):
+        if event.state==8 and event.keycode==13:
+            # Enter
+            None
+        elif event.state==8 and event.keycode==27:
+            # Escape
+            self._set_description_box_text()
+        
+    def _get_description(self):
+        debug('ItemForm._get_description: {}'.format(self.description_box.get('1.0', tk.END)))
+        return self.description_box.get('1.0', tk.END)
 
     def _update_tags(self, event):
+        """
+        http://stackoverflow.com/questions/6687108/tab-order-in-tkinter
+        """
+        debug('ItemForm._update_tags')
         if event.state==8 and event.keycode==13:
             debug('update_tags')
             self.item.tags=self.tags_var.get().split(',')
 
+    def _focus_set_status_box(self, event):
+        self.status_box.focus_set()
+        return "break"
+
+    def _focus_set_title_box(self, event):
+        self.title_box.focus_set()
+        return "break"
+
+    #def _select_all_status(self):
+    #    debug('ItemForm._select_all_status')
+    #    self.status_box.select_range(0, tk.END)
+
+    def _select_all_title(self):
+        debug('ItemForm._select_all_title')
+        self.title_box.select_range(0, tk.END)
+
+    def _select_all_description(self, event=None):
+        self.description_box.tag_add(tk.SEL, "1.0", tk.END)
+        self.description_box.mark_set(tk.INSERT, "1.0")
+        self.description_box.see(tk.INSERT)
+
+    def test(self, event):
+        debug('TEST')
+
+    def _close_form(self):
+        self.form.destroy()
+
+    def _set_description_box_text(self):
+        if self.item.description:
+            self.description_box.insert(tk.END, self.item.description + '\n')
+        else:
+            self.description_box.delete('1.0', tk.END)
+            self.description_box.insert('1.0', self._description_doc)
+            self._select_all_description()
+
+    def _draw_description(self):
+        description_frame=tk.Frame(self.form)
+        description_frame.pack(fill=tk.X, padx=2, pady=2)
+        self.description_bar=tk.Scrollbar(description_frame)
+        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        description_box_height=6
+        self.description_box=tk.Text(description_frame, height=description_box_height, borderwidth=1,
+                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width)
+        self.description_box.pack(side=tk.TOP, fill=tk.X)
+        self.description_box.configure(yscrollcommand=self.description_bar.set)
+        self.description_bar.configure(command=self.description_box.yview)
+        self._set_description_box_text()
+
+        self.description_box.bind('<Tab>', self._focus_set_status_box)
+        self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
+        #self.description_box.bind('<Control-a>', self._select_all_description)
+        self.description_box.bind('<Key>', self._keypress_description)
+
     def _draw(self):
 
         item=self.item
+        self.form.title(item.title)
 
         # Title
         title_frame=tk.Frame(self.form)
@@ -62,43 +166,50 @@ class ItemForm():
                                 width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
         self.title_box.pack(fill=tk.X)
         self.title_box.bind('<Double-1>', self._enable_title)
-        self.title_box.bind('<Key>', self._update_title)
-        self.title_var.set(self.item.title)
-        self.form.title(item.title)
-        self.title_box.configure(state=tk.DISABLED)
+        self.title_box.bind('<Key>', self._keypress_title)
+        self.title_var.set(item.title)
+        self._disable_title()
 
         line=tk.Frame(self.form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
         line.pack(fill=tk.X)
+        
+        self._draw_description()
+        self._disable_description()
+        
+        if not item.description:
+            self._unpack_description()
 
         # Status
         status_frame=tk.Frame(self.form)
-        status_frame.pack(fill=tk.X, padx=2, pady=2)
+        status_frame.pack(fill=tk.X, padx=2, pady=6)
         self.status_var=tk.StringVar()
-        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
+        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='<'), relief=tk.FLAT,
                                  width=self.widget_width, textvariable=self.status_var)
         self.status_box.pack(fill=tk.X)
-        self.status_box.bind('<Key>', self._status_keypress)
+        self.status_box.bind('<Key>', self._keypress_status)
+        #self.status_box.bind('<FocusIn>', self._select_all_status)
         self.status_var.set(self._status_doc)
         self.status_box.focus_set()
         self.status_box.select_range(0, tk.END)
 
+        line=tk.Frame(status_frame, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
+        line.pack(fill=tk.X)
+        
         # Status history.
-        history_frame=tk.Frame(self.form)
-        history_frame.pack(fill=tk.X, padx=2, pady=2)
-        if len(self.item.status_history) <= 6:
-            history_box_height=3
+        history_bar=tk.Scrollbar(status_frame)
+        history_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        if len(item.status_history) <= 6:
+            history_box_height=4
         else:
             history_box_height=6
 
-        self.history_box=tk.Text(history_frame, height=history_box_height, borderwidth=1, font=self.theme.font(),
+        self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='<'),
                                  relief=tk.FLAT, width=self.widget_width, fg='dark grey')
-        self.history_box.pack(side=tk.LEFT, fill=tk.X)
+        self.history_box.pack(side=tk.TOP, fill=tk.X)
 
         for text in item.status_history:
             self.history_box.insert(tk.END, text+'\n')
 
-        history_bar=tk.Scrollbar(history_frame)
-        history_bar.pack(side=tk.RIGHT, fill=tk.Y)
         self.history_box.configure(yscrollcommand=history_bar.set)
         history_bar.configure(command=self.history_box.yview)
 
@@ -107,24 +218,26 @@ class ItemForm():
         # Tags
         tags_frame=tk.Frame(self.form)
         tags_frame.pack(fill=tk.X, padx=2, pady=2)
-        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(), anchor="w", width="10", relief=tk.FLAT, fg='black')
+        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size='<'), anchor="w", width="10", relief=tk.FLAT, fg='black')
         tags_label.pack(fill=tk.X)
         self.tags_var=tk.StringVar()
-        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='>'), relief=tk.FLAT, width=self.widget_width,
+        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
                           textvariable=self.tags_var)
         self.tags_box.pack(fill=tk.X)
         self.tags_box.bind('<Key>', self._update_tags)
-        self.tags_var.set(','.join(self.item.tags))
+        self.tags_var.set(','.join(item.tags))
 
         canvas_frame=tk.Frame(self.form)
         canvas_frame.pack(fill=tk.X, padx=2, pady=2)
         canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
         canvas.pack(fill=tk.X)
 
-        f=filebar.FileBar(root=self.form, canvas=canvas, height=60)
+        self.fb=filebar.FileBar(root=self.form, canvas=canvas, height=60)
         debug('folder={}'.format(item.folder))
-        f.add_folder(directory=item.folder.replace('\\', '\\\\'))
-        f.draw()
+        self.fb.add_files(directory=item.folder.replace('\\', '\\\\'), drags=False)
+        #self.fb.add_folder(directory=item.folder.replace('\\', '\\\\'))
+        self.fb.draw()
+
 
 class Item():
     def __init__(self):
@@ -146,6 +259,7 @@ class Item():
         self.status_history=[]
         self.folder=None
         self.object_id=None
+        self.description=None
 
     @property
     def text (self):
@@ -166,6 +280,18 @@ class Item():
         self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text)
         self._status=text
 
+    def has_tags(self):
+        if len(self.tags) > 0:
+            return True
+        else:
+            return False
+
+    def get_primary_tag(self):
+        if self.has_tags():
+            return self.tags[0]
+        else:
+            return None
+
     def add_tags(self, tags=None):
         """
         Append a single tag or extend the tag list with multiple tags if you pass in a list of tags.
@@ -176,58 +302,58 @@ class Item():
             self.tags.append(tags)
 
     def _parse_input_text(self, text):
-            """
-            Take the input text and parse out tags, title and current status.
+        """
+        Take the input text and parse out tags, title and current status.
 
-            Title <status> [tag, tag]
-            tag@Title <status> [tag,tag]
+        Title <status> [tag, tag]
+        tag@Title <status> [tag,tag]
 
-            """
-            debug('Item._parse_input_text: {}'.format(text))
+        """
+        debug('Item._parse_input_text: {}'.format(text))
 
-            # Values before the first '@' are tags and should be in a comma separated list
-            # Some tags are special, like colors, only the first color will apply.
+        # Values before the first '@' are tags and should be in a comma separated list
+        # Some tags are special, like colors, only the first color will apply.
 
-            self.tags=[]
-            if text.find('@') > 0:
-                at_tag=False
-                tag=text.split('@')[0].strip()
-                if ' ' not in tag:
-                    at_tag=True
-                    self.add_tags(tag)
-                    text=text.split('@')[1]
-                    
-            debug('! tags={0} text={1}'.format(self.tags, text))
+        self.tags=[]
+        if text.find('@') > 0:
+            at_tag=False
+            tag=text.split('@')[0].strip()
+            if ' ' not in tag:
+                at_tag=True
+                self.add_tags(tag)
+                text=text.split('@')[1]
 
-            # Status is in last set of angle brackets if it exist.
-            if text.rfind('<') > 0:
-                b=text.rfind('<')
-                e=text.rfind('>')
-                if b < e:
-                    self.status=text[b+1:e]
+        debug('! tags={0} text={1}'.format(self.tags, text))
+
+        # Status is in last set of angle brackets if it exist.
+        if text.rfind('<') > 0:
+            b=text.rfind('<')
+            e=text.rfind('>')
+            if b < e:
+                self.status=text[b+1:e]
+                text=text[0:b]+text[e+1:]
+
+        debug('! status={0} text={1}'.format(self.status, text))
+
+        # Everything in last set of brackets are tags.
+        if text.rfind('['):
+            b=text.rfind('[')
+            e=text.rfind(']')
+            if b < e:
+                are_tags=True
+                tags=text[b+1:e].split(',')
+                tags=[tag.strip() for tag in tags]
+                for tag in tags:
+                    if ' ' in tag:
+                        # Tags with blanks are not valid. These are probably not tags.
+                        are_tags=False
+                if are_tags:
+                    self.add_tags(tags)
                     text=text[0:b]+text[e+1:]
 
-            debug('! status={0} text={1}'.format(self.status, text))
+        debug('! tags={0} text={1}'.format(self.tags, text))
 
-            # Everything in last set of brackets are tags.
-            if text.rfind('['):
-                b=text.rfind('[')
-                e=text.rfind(']')
-                if b < e:
-                    are_tags=True
-                    tags=text[b+1:e].split(',')
-                    tags=[tag.strip() for tag in tags]
-                    for tag in tags:
-                        if ' ' in tag:
-                            # Tags with blanks are not valid. These are probably not tags.
-                            are_tags=False
-                    if are_tags:
-                        self.add_tags(tags)
-                        text=text[0:b]+text[e+1:]
-
-            debug('! tags={0} text={1}'.format(self.tags, text))
-
-            self.title=text
+        self.title=text
 
     def _get_folder_path(self):
         new_path=os.path.join(bin.application_root_folder(), 'timeline', bin.get_valid_folder_name_from_string(self.title))
@@ -262,6 +388,12 @@ class Items():
     def __init__(self, *args, **kwargs):
         # Returns a dictionary of all items
         self.items=bin.open_database('TIMELINE_ITEMS')
+        self.patch()
+
+    def patch(self):
+        for item in self.items.values():
+            if not hasattr(item, 'description'):
+                item.description=None
 
     def all_items(self):
         return self.items.values()
@@ -314,17 +446,6 @@ class Timeline():
             self.height=kwargs['height']
         else:
             self.height=(100,90,80)
-        
-        if 'statusbox' in kwargs.keys():
-            self.statusbox=kwargs['statusbox']
-        else:
-            self.statusbox=statusbox.StatusBox(
-            root=self.root,
-            canvas=self.canvas,
-            x=2,
-            y=2,
-            height=16,
-            width=self.width)
 
         if 'default_item_type' in kwargs.keys():
            self.default_item_type=kwargs['default_item_type']
@@ -399,6 +520,19 @@ class Timeline():
         self.timelines=(self.hourly, self.daily, self.monthly)
 
         self._timelines_draw()
+
+        if 'statusbox' in kwargs.keys():
+            self.statusbox=kwargs['statusbox']
+        else:
+            self.statusbox=statusbox.StatusBox(
+            root=self.root,
+            canvas=self.canvas,
+            theme=self.theme,
+            font_size='<',
+            x=4,
+            y=self.monthly['bottom']+4,
+            height=16,
+            width=self.width)
 
         # This is a dict of all of the items in the database, indexed by key.
         self.items=Items()
@@ -492,13 +626,15 @@ class Timeline():
                     elif self.item_label_display_int==1:
                         display_text=item.title
                     elif self.item_label_display_int==2:
-                        display_text='{0}@{1}'.format(item.tags[0], item.title)
+                        if item.has_tags():
+                            display_text='{0}@{1}'.format(item.get_primary_tag(), item.title)
+                        else:
+                            display_text='{0}@{1}'.format('tag', item.title)
                     elif self.item_label_display_int==3:
-                        display_text='{}'.format(item.status)
-                    elif self.item_label_display_int==4:
-                        display_text='{0}@{1}'.format(item.tags[0], item.status)
-                    elif self.item_label_display_int==5:
-                        display_text='{0}@{1} <{2}>'.format(item.tags[0], item.title, item.status)
+                        if item.has_tags():
+                            display_text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
+                        else:
+                            display_text='{0}@{1} <{2}>'.format('tag', item.title, item.status)
 
                     x,y,right,bottom=self.canvas.coords(item.object_id)
                     object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
@@ -549,8 +685,12 @@ class Timeline():
         debug('Timeline.keypress: {}'.format(dict))
         # F1 key press
         if dict['state']==8 and dict['keycode']==112:
+            # 0 Nothing displayed next to item.
+            # 1 Title
+            # 2 tag@title
+            # 3 tag@title <status>
             self.item_label_display_int+=1
-            if self.item_label_display_int > 4:
+            if self.item_label_display_int > 3:
                 self.item_label_display_int=0
             # ToDo: To speed performance up here I cold just draw the hourly items.
             self.draw_items()
@@ -584,18 +724,11 @@ class Timeline():
                 item=self.items.get_by_key(key)
                 text=None
                 if time and key:
-
-                    if self.item_label_display_int==0:
-                        text=''
-                    elif self.item_label_display_int==1:
-                        text=item.title
-                    elif self.item_label_display_int==2:
-                        text='{0}@{1}'.format(item.tags[0], item.title)
-                    elif self.item_label_display_int==3:
-                        '[{}]'.format(item.status)
-                    elif self.item_label_display_int==4:
-                        text='{0}@{1}'.format(item.tags[0], item.status)
-
+                    if item.has_tags():
+                        text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
+                    else:
+                        text='{0}@{1} <{2}>'.format('', item.title, item.status)
+                        
                     self._display_time_with_text(time, text)
                 else:
                     debug('No coord time!')

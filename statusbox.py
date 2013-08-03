@@ -6,6 +6,8 @@ from bin import *
 import time
 from PIL import ImageTk, Image, ImageOps
 from debug import *
+import theme
+
 from collections import OrderedDict
 
 class StatusBox():
@@ -16,6 +18,18 @@ class StatusBox():
 
         self.root=kwargs['root']
         self.canvas=kwargs['canvas']
+
+        if 'theme' in kwargs.keys():
+            self.theme=kwargs['theme']
+        else:
+            self.theme=theme.Theme()
+
+        # The font_size can be a number which is a specific font size of it can be one or more "<" or ">"'s which are
+        # used to adjust the size from the base font size using the theme class.
+        if 'font_size' in kwargs.keys():
+            self.font_size=kwargs['font_size']
+        else:
+            self.font_size=None
 
         if 'width' in kwargs.keys():
             self.width=kwargs['width']
@@ -41,6 +55,8 @@ class StatusBox():
 
         self._text=None
 
+        debug('Statusbox.__init__: x={0} y={1}'.format(self.x, self.y))
+
     @property
     def text(self):
         return self._text
@@ -49,7 +65,7 @@ class StatusBox():
     def text(self, text):
         self.clear()
         if text:
-            self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=('Arial', 12), fill="black", anchor="nw", justify="left")
+            self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=self.theme.font(size=self.font_size), fill="black", anchor="nw", justify="left")
 
     def clear(self):
         debug2('StatusBox.clear')

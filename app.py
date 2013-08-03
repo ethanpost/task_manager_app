@@ -12,7 +12,7 @@ class App(tk.Tk):
         self.wm_title('Nudge|Pipeline')
 
         timeline_height=(100,85,70)
-        statusbox_height=0
+        statusbox_height=25
         canvas_height=sum(timeline_height)+statusbox_height
 
         self.geometry('950x{}+100+100'.format(canvas_height))
