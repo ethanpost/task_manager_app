@@ -15,6 +15,7 @@ import theme
 class ItemForm():
     def __init__(self, root, theme, item):
         self.form=tk.Toplevel(root)
+        self.form.protocol("WM_DELETE_WINDOW", self._close_form)
         self.form.bind_class("Text","<Control-a>", self.select_all)
         self.form.bind_class("Entry","<Control-a>", self.select_all)
         self.theme=theme
@@ -23,6 +24,11 @@ class ItemForm():
         self.widget_width=75
         self.item=item
         self._draw()
+
+    def _close_form(self):
+        debug('ItemForm._close_form')
+        self.item.save()
+        self.form.destroy()
 
     def select_all(self, event):
         if event.widget.widgetName=='entry':
@@ -33,7 +39,7 @@ class ItemForm():
     def _enable_description(self):
         self.description_box.configure(state=tk.NORMAL)
 
-    def _enable_title(self, event):
+    def _enable_title_and_description(self, event):
         self.title_box.configure(state=tk.NORMAL)
         self.title_box.focus_set()
         self._pack_description()
@@ -62,11 +68,15 @@ class ItemForm():
                 self.history_box.configure(state=tk.NORMAL)
                 self.item.status=self.status_var.get()
                 self.history_box.insert(1.0, self.item.status_history[0]+'\n')
-                self.status_var.set('')
+                self.status_var.set(self._status_doc)
                 self.history_box.configure(state=tk.DISABLED)
+                self._focus_in_status()
         elif event.state==8 and event.keycode==27:
             # Escape
-            self._close_form()
+            self.status_var.set(self._status_doc)
+            self._focus_in_status()
+        #else:
+           # self.status_var_backup=self.status_var.get()
 
     def _keypress_title(self, event):
         debug('ItemForm._keypress_title: state={0} keycode={1}'.format(event.state, event.keycode))
@@ -86,10 +96,18 @@ class ItemForm():
         elif event.state==8 and event.keycode==27:
             # Escape
             self._set_description_box_text()
-        
+
+    def _keypress_tags(self, event):
+        if event.state==8 and event.keycode==13:
+            # Enter
+            None
+        elif event.state==8 and event.keycode==27:
+            # Escape
+            self.tags_var.set(','.join(self.item.tags))
+
     def _get_description(self):
         debug('ItemForm._get_description: {}'.format(self.description_box.get('1.0', tk.END)))
-        return self.description_box.get('1.0', tk.END)
+        return self.description_box.get('1.0', tk.END).rstrip()
 
     def _update_tags(self, event):
         """
@@ -99,6 +117,18 @@ class ItemForm():
         if event.state==8 and event.keycode==13:
             debug('update_tags')
             self.item.tags=self.tags_var.get().split(',')
+
+    def _focus_in_tags(self, event):
+        self.tags_box.select_range(tk.END, tk.END)
+        
+    def _focus_out_description(self, event):
+        """
+        Save description to item object on focus out event.
+        """
+        if self._get_description() != self._description_doc or self._get_description()=='':
+            self.item.description=self._get_description()
+            self._description_doc=''
+            debug('ItemForm._focus_out_description')
 
     def _focus_set_status_box(self, event):
         self.status_box.focus_set()
@@ -117,23 +147,19 @@ class ItemForm():
         self.title_box.select_range(0, tk.END)
 
     def _select_all_description(self, event=None):
-        self.description_box.tag_add(tk.SEL, "1.0", tk.END)
-        self.description_box.mark_set(tk.INSERT, "1.0")
-        self.description_box.see(tk.INSERT)
+        self.description_box.tag_add("sel","1.0","end")
 
     def test(self, event):
         debug('TEST')
 
-    def _close_form(self):
-        self.form.destroy()
-
     def _set_description_box_text(self):
+        debug('ItemForm: _set_description_box_text')
+        self.description_box.delete('1.0', tk.END)
         if self.item.description:
-            self.description_box.insert(tk.END, self.item.description + '\n')
+            self.description_box.insert('1.0', self.item.description)
         else:
-            self.description_box.delete('1.0', tk.END)
             self.description_box.insert('1.0', self._description_doc)
-            self._select_all_description()
+        self._select_all_description()
 
     def _draw_description(self):
         description_frame=tk.Frame(self.form)
@@ -150,8 +176,13 @@ class ItemForm():
 
         self.description_box.bind('<Tab>', self._focus_set_status_box)
         self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
+        self.description_box.bind('<FocusOut>', self._focus_out_description)
         #self.description_box.bind('<Control-a>', self._select_all_description)
         self.description_box.bind('<Key>', self._keypress_description)
+
+    def _focus_in_status(self, event=None):
+        if self.status_var.get() == self._status_doc:
+            self.status_box.select_range(0, tk.END)
 
     def _draw(self):
 
@@ -165,7 +196,7 @@ class ItemForm():
         self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
                                 width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
         self.title_box.pack(fill=tk.X)
-        self.title_box.bind('<Double-1>', self._enable_title)
+        self.title_box.bind('<Double-1>', self._enable_title_and_description)
         self.title_box.bind('<Key>', self._keypress_title)
         self.title_var.set(item.title)
         self._disable_title()
@@ -187,10 +218,11 @@ class ItemForm():
                                  width=self.widget_width, textvariable=self.status_var)
         self.status_box.pack(fill=tk.X)
         self.status_box.bind('<Key>', self._keypress_status)
-        #self.status_box.bind('<FocusIn>', self._select_all_status)
+        self.status_box.bind('<FocusIn>', self._focus_in_status)
         self.status_var.set(self._status_doc)
         self.status_box.focus_set()
-        self.status_box.select_range(0, tk.END)
+        self._focus_in_status()
+        #self.status_box.select_range(0, tk.END)
 
         line=tk.Frame(status_frame, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
         line.pack(fill=tk.X)
@@ -224,7 +256,8 @@ class ItemForm():
         self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
                           textvariable=self.tags_var)
         self.tags_box.pack(fill=tk.X)
-        self.tags_box.bind('<Key>', self._update_tags)
+        self.tags_box.bind('<Key>', self._keypress_tags)
+        self.tags_box.bind('<FocusIn>', self._focus_in_tags)
         self.tags_var.set(','.join(item.tags))
 
         canvas_frame=tk.Frame(self.form)
@@ -232,12 +265,11 @@ class ItemForm():
         canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
         canvas.pack(fill=tk.X)
 
-        self.fb=filebar.FileBar(root=self.form, canvas=canvas, height=60)
-        debug('folder={}'.format(item.folder))
-        self.fb.add_files(directory=item.folder.replace('\\', '\\\\'), drags=False)
-        #self.fb.add_folder(directory=item.folder.replace('\\', '\\\\'))
-        self.fb.draw()
-
+        self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
+        debug('folder_path={}'.format(item.folder_path))
+        self.filebar.patterns_to_exclude=['_data_']
+        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
+        self.filebar.draw()
 
 class Item():
     def __init__(self):
@@ -257,7 +289,7 @@ class Item():
         self.tags=[]
         self._status=None
         self.status_history=[]
-        self.folder=None
+        self.folder_path=None
         self.object_id=None
         self.description=None
 
@@ -359,6 +391,17 @@ class Item():
         new_path=os.path.join(bin.application_root_folder(), 'timeline', bin.get_valid_folder_name_from_string(self.title))
         return new_path
 
+    def save(self):
+        debug('Item.save')
+        folder_path=os.path.join(self.folder_path, '_data_')
+        bin.mkdir(folder_path)
+        bin.save_database(
+            name=self.key,
+            dict={'item': self},
+            folder_path=folder_path,
+            file_name='{}.db'.format(self.key),
+        )
+
 class NewItem(Item):
     def __init__(self, text, x, y, dt):
         super().__init__()
@@ -380,9 +423,9 @@ class NewItem(Item):
         if not self.title:
             self.title=text
 
-        self.folder=self._get_folder_path()
+        self.folder_path=self._get_folder_path()
 
-        bin.mkdir(self.folder)
+        bin.mkdir(self.folder_path)
 
 class Items():
     def __init__(self, *args, **kwargs):
@@ -394,6 +437,8 @@ class Items():
         for item in self.items.values():
             if not hasattr(item, 'description'):
                 item.description=None
+            if hasattr(item, 'folder'):
+                item.folder_path=item.folder
 
     def all_items(self):
         return self.items.values()
@@ -482,6 +527,7 @@ class Timeline():
         self.canvas.tag_bind("timelines", "<Motion>",          self._timeline_mouse_motion)
         self.canvas.tag_bind("timelines", "<ButtonRelease-1>", self._timeline_mouse_up)
         self.canvas.tag_bind("timelines", "<Double-1>",        self._timeline_mouse_doubleclick)
+        self.canvas.bind_all("<MouseWheel>", self._timeline_mouse_wheel)
 
         self.canvas.tag_bind("item", "<ButtonPress-1>",   self._item_mouse_down)
         self.canvas.tag_bind("item", "<B1-Motion>",       self._item_mouse_drag)
@@ -494,7 +540,7 @@ class Timeline():
             'name': 'hourly',
             'y': self.y,
             'height': self.height[0],
-            'total_days': .66
+            'total_days': 8/24
         }
         self.hourly['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.hourly['total_days']/2)
         self.hourly['label_format']='%I%p'
@@ -503,7 +549,7 @@ class Timeline():
             'name': 'daily',
             'y': self.hourly['y']+self.hourly['height'],
             'height': self.height[1],
-            'total_days': 14
+            'total_days': 7
         }
         self.daily['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.daily['total_days']/2)
         self.daily['label_format']='%d%a'
@@ -512,7 +558,7 @@ class Timeline():
             'name': 'monthly',
             'y': self.daily['y']+self.daily['height'],
             'height': self.height[2],
-            'total_days': 120
+            'total_days': 180
         }
         self.monthly['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.monthly['total_days']/2)
         self.monthly['label_format']='%B %y'
@@ -545,6 +591,26 @@ class Timeline():
         self.temp={}
 
         self._build_menus()
+
+    def _adjust_timeline_total_days(self, timeline, more_days=None, less_days=None):
+        if more_days:
+            negative_or_positive=+1
+        else:
+            negative_or_positive=-1
+            
+        factor={'hourly': 15/1440, 'daily': 8/24, 'monthly': 7}[timeline['name']]
+        timeline['total_days']+=factor*negative_or_positive
+        self._timelines_draw()
+        self.draw_items()
+
+    def _timeline_mouse_wheel(self, event):
+        debug('Timeline._timeline_mouse_wheel: {0} {1} {2} {3}'.format(event.keycode, event.x, event.y, event.delta))
+        timeline=self._get_timeline_from_xy(event.x, event.y)
+        if timeline:
+            if event.keycode==120:
+                self._adjust_timeline_total_days(timeline, more_days=True)
+            elif event.keycode==-120:
+                self._adjust_timeline_total_days(timeline, less_days=True)
 
     def _build_menus(self):
         """
@@ -638,6 +704,14 @@ class Timeline():
 
                     x,y,right,bottom=self.canvas.coords(item.object_id)
                     object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
+
+    def dump(self, file_name):
+        f=open(file_name, mode='w')
+        for item in self.items.all_items():
+            f.write(item.title+'\n')
+            for status in item.status_history:
+                f.write("   "+status+'\n')
+        f.close()
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
         object_id=self.canvas.find_closest(x, y, start=start)[0]

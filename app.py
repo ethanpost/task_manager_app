@@ -27,6 +27,8 @@ class App(tk.Tk):
             height=timeline_height
         )
 
+        self.timeline.dump(file_name='C:\\temp\\dump.txt')
+
     def cbfunc(self, dict):
         debug('cbfunc: {}'.format(dict))
         

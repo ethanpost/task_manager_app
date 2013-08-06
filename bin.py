@@ -38,6 +38,11 @@ def days_between_two_dates (t1, t2):
     debug3('bin.days_between_two_dates: r={}'.format(r))
     return r
 
+def add_backslash_to_backslash(string):
+    r=string.replace('\\', '\\\\')
+    debug('bin.add_backslash_to_backslash: {0} {1}'.format(string, r))
+    return r
+
 # ToDo: Add caching here and need a way to check modified time on file in event cache is invalidated.
 def get_photoimage_thumbnail(file_path, size=40, border_color='black', border_size=1):
     """
@@ -54,7 +59,15 @@ def nvl(var, value_if_none):
         return value_if_none
     else:
         return var
-    
+
+def write(file_name, text=[]):
+    if type(text) != list:
+        text=(text)
+    f.open(file_name, 'a')
+    for line in text:
+        f.write(line+'\n')
+    f.close()
+
 class reverse_logger():
     def __init__(self, *args, **kwargs):
         self._filepath=kwargs['filepath']
@@ -146,14 +159,13 @@ def open_database(name):
     debug('open_database: r={}'.format(r))
     return r
 
-def save_database(name, dict):
+def save_database(
+    name,
+    dict,
+    folder_path=application_root_folder(),
+    file_name='app.db'):
     debug('save_database: {}'.format(dict))
-    #c={}
-    #for key, value in dict.items():
-        #debug('key={}'.format(key))
-        #c[key]=value
-    file_path=os.path.join(application_root_folder(), 'app.db')
+    file_path=os.path.join(folder_path, file_name)
     d=shelve.open(file_path, writeback=True)
-    #d[name]=c
     d[name]=dict
     d.close()

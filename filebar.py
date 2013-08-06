@@ -6,6 +6,7 @@ from bin import *
 import time
 from PIL import ImageTk, Image, ImageOps
 from debug import *
+import re
 
 class FileBar():
     
@@ -78,6 +79,8 @@ class FileBar():
             '.txt'  : 'text.jpg'
         }
 
+        self.patterns_to_exclude=[]
+
         self.canvas.tag_bind("FileBarFile", "<ButtonPress-1>",   self._thumbnail_mouse_down)
         self.canvas.tag_bind("FileBarFile", "<B1-Motion>",       self._thumbnail_mouse_over)
         self.canvas.tag_bind("FileBarFile", "<ButtonRelease-1>", self._thumbnail_mouse_up)
@@ -132,6 +135,18 @@ class FileBar():
     def add_files(self, directory, drags=True):
         debug('FileBar.add_files: {}'.format(directory))
         for file in os.listdir(directory):
+
+            skip_file=False
+
+            for pattern in self.patterns_to_exclude:
+                r=re.compile(pattern)
+                if r.match(file):
+                    skip_file=True
+                    break
+
+            if skip_file:
+                continue
+                    
             extension = os.path.splitext(file)[-1].lower()
 
             if extension in self.extensions.keys():
