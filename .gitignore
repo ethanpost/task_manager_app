@@ -1,5 +1,8 @@
 # Shelve Database
-*.db.*
+*.bak
+*.dat
+*.dir
 
 *.idea*
 __pycache__
+items

@@ -13,6 +13,28 @@ import datetime
 import subprocess
 from PIL import ImageTk, Image, ImageOps
 
+def find(root, type=None, name='.*'):
+    """
+    Works like unix find command (this is a generator).
+
+    root is the root directory to start the search from.
+    type 'd' for directory or 'f' for file, None will match the pattern against the full path to anything found.
+    name Is a regular expression to match to.
+    """
+    #debug('root={0} type={1} name={2}'.format(root, type, name))
+    pattern=re.compile(name)
+    for root_dir, dirs, files in os.walk(root):
+        # debug('zzz: {}'.format(files))
+        if type=='f' or type is None:
+            for file in files:
+                if re.match(pattern, file):
+                    yield os.path.join(root_dir, file)
+
+        if type=='d' or type is None:
+            basename=os.path.basename(root_dir)
+            if re.match(pattern, basename):
+                yield root_dir
+
 def seconds_between_two_dates (t1, t2):
     """
     Return the number of seconds between two dates.
@@ -63,7 +85,7 @@ def nvl(var, value_if_none):
 def write(file_name, text=[]):
     if type(text) != list:
         text=(text)
-    f.open(file_name, 'a')
+    f=open(file_name, 'a')
     for line in text:
         f.write(line+'\n')
     f.close()
@@ -109,7 +131,7 @@ def sublime (file):
 def run_program (program_path=None, file_path=None):
     process = subprocess.Popen([program_path, file_path], shell=True)
 
-def get_valid_folder_name_from_string(string):
+def get_valid_path_name_from_string(string):
     debug('bin.get_valid_folder_name_from_string: string={}'.format(string))
     return re.sub(r"[\/\\\:\*\?\"\<\>\|]", "", string)
 
@@ -119,7 +141,7 @@ def to_char (t=datetime.datetime.now(), f='%H:%M'):
     #f='%a %b %d %I:%M %p'
     return datetime.datetime.strftime(t, f)
 
-def date_to_string (datetime=datetime.datetime.now(), format='YYYY_MM_DD_HH24_MI_SS'):
+def date_to_string (date=datetime.datetime.now(), format='YYYY_MM_DD_HH24_MI_SS'):
     """
     Return a string from a date using the format specified.
     """
@@ -131,8 +153,12 @@ def date_to_string (datetime=datetime.datetime.now(), format='YYYY_MM_DD_HH24_MI
     format=re.sub('HH24', '%H', format)
     format=re.sub('MI', '%M', format)
     format=re.sub('SS', '%S', format)
-    return datetime.datetime.strftime(datetime, format)
+    return datetime.datetime.strftime(date, format)
 
+def mv (source_path, target_path):
+    debug('mv: {0} {1}'.format(source_path, target_path))
+    shutil.move(source_path, target_path)
+    
 def mkdir(directory):
     if not os.path.exists(directory):
         debug('mkdir: {}'.format(directory))
@@ -141,15 +167,22 @@ def mkdir(directory):
 def rmdir(directory):
     shutil.rmtree(directory)
 
+def application_root_path():
+    return os.path.dirname(os.path.realpath(__file__))
+
 def application_root_folder():
     return os.path.dirname(os.path.realpath(__file__))
 
 def random_string(length=10):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(length))
 
-def open_database(name):
-    debug('open_database: {}'.format(name))
-    file_path=os.path.join(application_root_folder(), 'app.db')
+def open_database(
+    name,
+    folder_path=application_root_folder(),
+    file_name='app.db'):
+    debug('open_database: {0} {1} {2}'.format(name, folder_path, file_name))
+    file_path=os.path.join(folder_path, file_name)
+    debug('file_path={}'.format(file_path))
     d=shelve.open(file_path, writeback=True)
     if name in d.keys():
         r=d[name]
@@ -168,4 +201,17 @@ def save_database(
     file_path=os.path.join(folder_path, file_name)
     d=shelve.open(file_path, writeback=True)
     d[name]=dict
+    d.close()
+
+def open_database2(file_path):
+    #debug('bin.open_database2: {0}'.format(file_path))
+    d=shelve.open(file_path, writeback=True)
+    #debug('bin.open_database2: {0}'.format(d))
+    return d['0']
+
+def save_database2(file_path, object):
+    #debug('save_database2: {0} {1}'.format(file_path, object))
+    d=shelve.open(file_path, writeback=True)
+    #debug('save_database2: {}'.format(d))
+    d['0']=object
     d.close()

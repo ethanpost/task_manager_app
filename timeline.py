@@ -11,6 +11,7 @@ import modalinputbox
 import filebar
 import datetime
 import theme
+import copy
 
 class ItemForm():
     def __init__(self, root, theme, item):
@@ -23,18 +24,128 @@ class ItemForm():
         self._description_doc='<Enter Description>'
         self.widget_width=75
         self.item=item
+        self.copy_of_item=copy.deepcopy(item)
+        self.title_var=tk.StringVar()
         self._draw()
 
     def _close_form(self):
         debug('ItemForm._close_form')
+        self.item.title=self.title_var.get()
+        self.item.description=self._get_description()
+        self.item.tags=self.tags_var.get()
         self.item.save()
         self.form.destroy()
 
-    def select_all(self, event):
-        if event.widget.widgetName=='entry':
-            event.widget.select_range(0, tk.END)
+    def _disable_description(self):
+        self.description_box.configure(state=tk.DISABLED)
+
+    def _disable_title(self):
+        self.title_box.configure(state=tk.DISABLED)
+
+    def _draw(self):
+
+        item=self.item
+        self.form.title(item.title)
+
+        # Title
+        title_frame=tk.Frame(self.form)
+        title_frame.pack(fill=tk.X, padx=2, pady=2)
+        self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
+                                width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
+        self.title_box.pack(fill=tk.X)
+        self.title_box.bind('<Double-1>', self._enable_title_and_description)
+        self.title_box.bind('<Key>', self._keypress_title)
+        self.title_var.set(item.title)
+        self._disable_title()
+
+        line=tk.Frame(self.form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
+        line.pack(fill=tk.X)
+
+        self._draw_description()
+        self._disable_description()
+
+        if not item.description:
+            self._unpack_description()
+
+        # Status
+        status_frame=tk.Frame(self.form)
+        status_frame.pack(fill=tk.X, padx=2, pady=6)
+        self.status_var=tk.StringVar()
+        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='<'), relief=tk.FLAT,
+                                 width=self.widget_width, textvariable=self.status_var)
+        self.status_box.pack(fill=tk.X)
+        self.status_box.bind('<Key>', self._keypress_status)
+        self.status_box.bind('<FocusIn>', self._focus_in_status)
+        self.status_var.set(self._status_doc)
+        self.status_box.focus_set()
+        self._focus_in_status()
+        #self.status_box.select_range(0, tk.END)
+
+        line=tk.Frame(status_frame, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
+        line.pack(fill=tk.X)
+
+        # Status history.
+        history_bar=tk.Scrollbar(status_frame)
+        history_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        if len(item.status_history) <= 6:
+            history_box_height=4
         else:
-            event.widget.tag_add("sel","1.0","end")
+            history_box_height=6
+
+        self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='<'),
+                                 relief=tk.FLAT, width=self.widget_width, fg='dark grey')
+        self.history_box.pack(side=tk.TOP, fill=tk.X)
+
+        for text in item.status_history:
+            self.history_box.insert(tk.END, text+'\n')
+
+        self.history_box.configure(yscrollcommand=history_bar.set)
+        history_bar.configure(command=self.history_box.yview)
+
+        self.history_box.configure(state=tk.DISABLED)
+
+        # Tags
+        tags_frame=tk.Frame(self.form)
+        tags_frame.pack(fill=tk.X, padx=2, pady=2)
+        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size='<'), anchor="w", width="10", relief=tk.FLAT, fg='black')
+        tags_label.pack(fill=tk.X)
+        self.tags_var=tk.StringVar()
+        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
+                          textvariable=self.tags_var)
+        self.tags_box.pack(fill=tk.X)
+        self.tags_box.bind('<Key>', self._keypress_tags)
+        self.tags_box.bind('<FocusIn>', self._focus_in_tags)
+        self.tags_var.set(','.join(item.tags))
+
+        canvas_frame=tk.Frame(self.form)
+        canvas_frame.pack(fill=tk.X, padx=2, pady=2)
+        canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
+        canvas.pack(fill=tk.X)
+
+        self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
+        self.filebar.patterns_to_exclude=['_data_']
+        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.directory), drags=False)
+        self.filebar.draw()
+
+    def _draw_description(self):
+        description_frame=tk.Frame(self.form)
+        description_frame.pack(fill=tk.X, padx=2, pady=2)
+        self.description_bar=tk.Scrollbar(description_frame)
+        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        description_box_height=6
+        self.description_box=tk.Text(description_frame, height=description_box_height, borderwidth=1,
+                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width)
+        self.description_box.pack(side=tk.TOP, fill=tk.X)
+        self.description_box.configure(yscrollcommand=self.description_bar.set)
+        self.description_bar.configure(command=self.description_box.yview)
+        self._set_description_box_text()
+
+        self.description_box.bind('<Tab>', self._focus_set_status_box)
+        self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
+        self.description_box.bind('<FocusOut>', self._focus_out_description)
+        #self.description_box.bind('<Control-a>', self._select_all_description)
+        self.description_box.bind('<Key>', self._keypress_description)
+
 
     def _enable_description(self):
         self.description_box.configure(state=tk.NORMAL)
@@ -46,19 +157,33 @@ class ItemForm():
         if self.item.description is None:
             self._enable_description()
 
-    def _disable_description(self):
-        self.description_box.configure(state=tk.DISABLED)
-
-    def _disable_title(self):
-        self.title_box.configure(state=tk.DISABLED)
-
-    def _unpack_description(self):
-        self.description_box.pack_forget()
-        self.description_bar.pack_forget()
+    def _focus_in_tags(self, event):
+        self.tags_box.select_range(tk.END, tk.END)
         
-    def _pack_description(self):
-        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.description_box.pack(side=tk.TOP, fill=tk.X)
+    def _focus_out_description(self, event):
+        """
+        Save description to item object on focus out event.
+        """
+        if self._get_description() != self._description_doc or self._get_description()=='':
+            self.item.description=self._get_description()
+            self._description_doc=''
+            debug('ItemForm._focus_out_description')
+
+    def _focus_set_status_box(self, event):
+        self.status_box.focus_set()
+        return "break"
+
+    def _focus_set_title_box(self, event):
+        self.title_box.focus_set()
+        return "break"
+
+    def _focus_in_status(self, event=None):
+        if self.status_var.get() == self._status_doc:
+            self.status_box.select_range(0, tk.END)
+
+    def _get_description(self):
+        debug('ItemForm._get_description: {}'.format(self.description_box.get('1.0', tk.END)))
+        return self.description_box.get('1.0', tk.END).rstrip()
 
     def _keypress_status(self, event):
         debug('ItemForm._item_form_update_status_history: {0} {1}'.format(event.state, event.keycode))
@@ -105,42 +230,15 @@ class ItemForm():
             # Escape
             self.tags_var.set(','.join(self.item.tags))
 
-    def _get_description(self):
-        debug('ItemForm._get_description: {}'.format(self.description_box.get('1.0', tk.END)))
-        return self.description_box.get('1.0', tk.END).rstrip()
+    def _pack_description(self):
+        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.description_box.pack(side=tk.TOP, fill=tk.X)
 
-    def _update_tags(self, event):
-        """
-        http://stackoverflow.com/questions/6687108/tab-order-in-tkinter
-        """
-        debug('ItemForm._update_tags')
-        if event.state==8 and event.keycode==13:
-            debug('update_tags')
-            self.item.tags=self.tags_var.get().split(',')
-
-    def _focus_in_tags(self, event):
-        self.tags_box.select_range(tk.END, tk.END)
-        
-    def _focus_out_description(self, event):
-        """
-        Save description to item object on focus out event.
-        """
-        if self._get_description() != self._description_doc or self._get_description()=='':
-            self.item.description=self._get_description()
-            self._description_doc=''
-            debug('ItemForm._focus_out_description')
-
-    def _focus_set_status_box(self, event):
-        self.status_box.focus_set()
-        return "break"
-
-    def _focus_set_title_box(self, event):
-        self.title_box.focus_set()
-        return "break"
-
-    #def _select_all_status(self):
-    #    debug('ItemForm._select_all_status')
-    #    self.status_box.select_range(0, tk.END)
+    def select_all(self, event):
+        if event.widget.widgetName=='entry':
+            event.widget.select_range(0, tk.END)
+        else:
+            event.widget.tag_add("sel","1.0","end")
 
     def _select_all_title(self):
         debug('ItemForm._select_all_title')
@@ -148,9 +246,6 @@ class ItemForm():
 
     def _select_all_description(self, event=None):
         self.description_box.tag_add("sel","1.0","end")
-
-    def test(self, event):
-        debug('TEST')
 
     def _set_description_box_text(self):
         debug('ItemForm: _set_description_box_text')
@@ -161,137 +256,51 @@ class ItemForm():
             self.description_box.insert('1.0', self._description_doc)
         self._select_all_description()
 
-    def _draw_description(self):
-        description_frame=tk.Frame(self.form)
-        description_frame.pack(fill=tk.X, padx=2, pady=2)
-        self.description_bar=tk.Scrollbar(description_frame)
-        self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
-        description_box_height=6
-        self.description_box=tk.Text(description_frame, height=description_box_height, borderwidth=1,
-                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width)
-        self.description_box.pack(side=tk.TOP, fill=tk.X)
-        self.description_box.configure(yscrollcommand=self.description_bar.set)
-        self.description_bar.configure(command=self.description_box.yview)
-        self._set_description_box_text()
+    def test(self, event):
+        debug('TEST')
 
-        self.description_box.bind('<Tab>', self._focus_set_status_box)
-        self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
-        self.description_box.bind('<FocusOut>', self._focus_out_description)
-        #self.description_box.bind('<Control-a>', self._select_all_description)
-        self.description_box.bind('<Key>', self._keypress_description)
+    def _unpack_description(self):
+        self.description_box.pack_forget()
+        self.description_bar.pack_forget()
 
-    def _focus_in_status(self, event=None):
-        if self.status_var.get() == self._status_doc:
-            self.status_box.select_range(0, tk.END)
-
-    def _draw(self):
-
-        item=self.item
-        self.form.title(item.title)
-
-        # Title
-        title_frame=tk.Frame(self.form)
-        title_frame.pack(fill=tk.X, padx=2, pady=2)
-        self.title_var=tk.StringVar()
-        self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
-                                width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
-        self.title_box.pack(fill=tk.X)
-        self.title_box.bind('<Double-1>', self._enable_title_and_description)
-        self.title_box.bind('<Key>', self._keypress_title)
-        self.title_var.set(item.title)
-        self._disable_title()
-
-        line=tk.Frame(self.form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
-        line.pack(fill=tk.X)
-        
-        self._draw_description()
-        self._disable_description()
-        
-        if not item.description:
-            self._unpack_description()
-
-        # Status
-        status_frame=tk.Frame(self.form)
-        status_frame.pack(fill=tk.X, padx=2, pady=6)
-        self.status_var=tk.StringVar()
-        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='<'), relief=tk.FLAT,
-                                 width=self.widget_width, textvariable=self.status_var)
-        self.status_box.pack(fill=tk.X)
-        self.status_box.bind('<Key>', self._keypress_status)
-        self.status_box.bind('<FocusIn>', self._focus_in_status)
-        self.status_var.set(self._status_doc)
-        self.status_box.focus_set()
-        self._focus_in_status()
-        #self.status_box.select_range(0, tk.END)
-
-        line=tk.Frame(status_frame, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
-        line.pack(fill=tk.X)
-        
-        # Status history.
-        history_bar=tk.Scrollbar(status_frame)
-        history_bar.pack(side=tk.RIGHT, fill=tk.Y)
-        if len(item.status_history) <= 6:
-            history_box_height=4
-        else:
-            history_box_height=6
-
-        self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='<'),
-                                 relief=tk.FLAT, width=self.widget_width, fg='dark grey')
-        self.history_box.pack(side=tk.TOP, fill=tk.X)
-
-        for text in item.status_history:
-            self.history_box.insert(tk.END, text+'\n')
-
-        self.history_box.configure(yscrollcommand=history_bar.set)
-        history_bar.configure(command=self.history_box.yview)
-
-        self.history_box.configure(state=tk.DISABLED)
-
-        # Tags
-        tags_frame=tk.Frame(self.form)
-        tags_frame.pack(fill=tk.X, padx=2, pady=2)
-        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size='<'), anchor="w", width="10", relief=tk.FLAT, fg='black')
-        tags_label.pack(fill=tk.X)
-        self.tags_var=tk.StringVar()
-        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
-                          textvariable=self.tags_var)
-        self.tags_box.pack(fill=tk.X)
-        self.tags_box.bind('<Key>', self._keypress_tags)
-        self.tags_box.bind('<FocusIn>', self._focus_in_tags)
-        self.tags_var.set(','.join(item.tags))
-
-        canvas_frame=tk.Frame(self.form)
-        canvas_frame.pack(fill=tk.X, padx=2, pady=2)
-        canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
-        canvas.pack(fill=tk.X)
-
-        self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
-        debug('folder_path={}'.format(item.folder_path))
-        self.filebar.patterns_to_exclude=['_data_']
-        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
-        self.filebar.draw()
+    def _update_tags(self, event):
+        """
+        http://stackoverflow.com/questions/6687108/tab-order-in-tkinter
+        """
+        debug('ItemForm._update_tags')
+        if event.state==8 and event.keycode==13:
+            debug('update_tags')
+            self.item.tags=self.tags_var.get().split(',')
 
 class Item():
-    def __init__(self):
-        debug('Item!')
+    def __init__(self, root_path, *args, **kwargs):
+        self.root_path=root_path
+        # Unique 20 character key generated automatically.
         self.key=None
+        # Used to store text property (getter/setter), this is parsed into tags, title and status.
         self._text=None
+        # Title of task, does not need to be unique.
         self.title=None
+        # Used to store x/y position within the app at various points.
         self.x=None
         self.y=None
+        # Used to position the item on the hourly, daily and monthly timeline.
+        self.y_as_pct_of_height=None
         self.image_path=None
         self.state=None
         self.size=None
         self.shape='rectangle'
         self.type=None
         self.datetime=None
-        self.y_as_pct_of_height=None
         self.tags=[]
         self._status=None
         self.status_history=[]
-        self.folder_path=None
+        self.directory=None
         self.object_id=None
         self.description=None
+        self._deleted=False
+        self.private=True
+        self.version=0
 
     @property
     def text (self):
@@ -311,6 +320,23 @@ class Item():
         # Status history is stored in a list, with most recent status first, we also add a timestamp.
         self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text)
         self._status=text
+
+    @property
+    def deleted (self):
+        return self._deleted
+
+    @deleted.setter
+    def deleted (self, deleted_true_false):
+        if deleted_true_false==True:
+            self._deleted=True
+            # Save must occur before the move or it recreates the original directory.
+            self.save()
+            bin.mv(self.directory, os.path.join(self.directory, '..', '_deleted_'))
+        else:
+            self._deleted=False
+
+    def move(self, root_path):
+        None
 
     def has_tags(self):
         if len(self.tags) > 0:
@@ -387,24 +413,15 @@ class Item():
 
         self.title=text
 
-    def _get_folder_path(self):
-        new_path=os.path.join(bin.application_root_folder(), 'timeline', bin.get_valid_folder_name_from_string(self.title))
-        return new_path
-
     def save(self):
         debug('Item.save')
-        folder_path=os.path.join(self.folder_path, '_data_')
-        bin.mkdir(folder_path)
-        bin.save_database(
-            name=self.key,
-            dict={'item': self},
-            folder_path=folder_path,
-            file_name='{}.db'.format(self.key),
-        )
-
+        data_path=os.path.join(self.directory.strip(), '_data_')
+        bin.mkdir(data_path)
+        bin.save_database2(os.path.join(data_path, self.key), object=self)
+    
 class NewItem(Item):
-    def __init__(self, text, x, y, dt):
-        super().__init__()
+    def __init__(self, root_path, text, x, y, dt):
+        super().__init__(root_path, text, x, y, dt)
         # ToDo: Need to blow right up here if text is not set and x and y need to be > 0.
         debug('NewItem! {}'.format(dt))
 
@@ -423,22 +440,36 @@ class NewItem(Item):
         if not self.title:
             self.title=text
 
-        self.folder_path=self._get_folder_path()
+        self.directory=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title))
+    
+        bin.mkdir(self.directory)
 
-        bin.mkdir(self.folder_path)
+        bin.write(file_name=os.path.join(self.directory, 'status.txt'), text=self.status)
 
 class Items():
-    def __init__(self, *args, **kwargs):
-        # Returns a dictionary of all items
-        self.items=bin.open_database('TIMELINE_ITEMS')
+    def __init__(self, root_dir):
+
+        self.items={}
+        # Find all _data_ directories
+        deleted=re.compile('.*_deleted_.*')
+        for data_dir in bin.find(root=root_dir, type='d', name='_data_'):
+            debug('data_dir: {}'.format(data_dir))
+            if not re.match(deleted, data_dir):
+                for file in bin.find(root=data_dir, type='f', name='.*\.dat'):
+                    key=os.path.basename(file).replace('.dat', '')
+                    self.items[key]=bin.open_database2(file.replace('.dat', ''))
+
+        # if the item is not shared and not the same version, patch it and save
+        # if the item is shared and the version does not match mark it as read only
+        # items should have a save all and each item should also have a save
+
+        # should add a load for above with a directory name, then we can add
+        # directories to the timeline and use the same items class.
+
         self.patch()
 
     def patch(self):
-        for item in self.items.values():
-            if not hasattr(item, 'description'):
-                item.description=None
-            if hasattr(item, 'folder'):
-                item.folder_path=item.folder
+       None
 
     def all_items(self):
         return self.items.values()
@@ -450,13 +481,8 @@ class Items():
         """
         Delete an item.
         """
+        self.items[key].deleted=True
         del self.items[key]
-        if save:
-            self.save()
-        
-    def save(self):
-        debug('Items.save')
-        bin.save_database('TIMELINE_ITEMS', self.items)
 
 class Timeline():
 
@@ -510,8 +536,6 @@ class Timeline():
 
         self.thumbnails={}
         
-        self.timeline_time=None
-        
         # Use object_id to return the key which was used to add the item (add_item).
         self._map_object_id_to_item_key={}
 
@@ -542,7 +566,6 @@ class Timeline():
             'height': self.height[0],
             'total_days': 8/24
         }
-        self.hourly['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.hourly['total_days']/2)
         self.hourly['label_format']='%I%p'
 
         self.daily={
@@ -551,7 +574,6 @@ class Timeline():
             'height': self.height[1],
             'total_days': 7
         }
-        self.daily['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.daily['total_days']/2)
         self.daily['label_format']='%d%a'
 
         self.monthly={
@@ -560,11 +582,11 @@ class Timeline():
             'height': self.height[2],
             'total_days': 180
         }
-        self.monthly['begin_time']=datetime.datetime.now()-datetime.timedelta(days=self.monthly['total_days']/2)
         self.monthly['label_format']='%B %y'
 
         self.timelines=(self.hourly, self.daily, self.monthly)
 
+        self.timeline_time=datetime.datetime.now()
         self._timelines_draw()
 
         if 'statusbox' in kwargs.keys():
@@ -580,8 +602,19 @@ class Timeline():
             height=16,
             width=self.width)
 
+        # Reference to application root_path.
+        self.root_path=bin.application_root_path()
+        
+        # Where item objects are stored.
+        self.default_item_path=os.path.join(self.root_path, 'items')
+        bin.mkdir(self.default_item_path)
+
+        # Where deleted item are stored.
+        self.default_deleted_items_path=os.path.join(self.root_path, 'items', '_deleted_')
+        bin.mkdir(self.default_deleted_items_path)
+
         # This is a dict of all of the items in the database, indexed by key.
-        self.items=Items()
+        self.items=Items(root_dir=self.default_item_path)
 
         self.patch()
 
@@ -598,9 +631,13 @@ class Timeline():
         else:
             negative_or_positive=-1
             
-        factor={'hourly': 15/1440, 'daily': 8/24, 'monthly': 7}[timeline['name']]
+        factor={'hourly': 30/1440, 'daily': 8/24, 'monthly': 7}[timeline['name']]
         timeline['total_days']+=factor*negative_or_positive
-        self._timelines_draw()
+
+        #t=self._get_time_from_xy(timeline['center_x'], timeline['center_y'])
+        #timeline['begin_time']=t-datetime.timedelta(days=timeline['total_days']/2)
+
+        self._timelines_draw_details()
         self.draw_items()
 
     def _timeline_mouse_wheel(self, event):
@@ -655,7 +692,7 @@ class Timeline():
             if not item.size:
                 item.size=int(self.height[0]/10)
             item.state='open'
-            self.save()
+            item.save()
 
         if delete_first:
             self.canvas.delete(item.key)
@@ -695,12 +732,12 @@ class Timeline():
                         if item.has_tags():
                             display_text='{0}@{1}'.format(item.get_primary_tag(), item.title)
                         else:
-                            display_text='{0}@{1}'.format('tag', item.title)
+                            display_text='{0}'.format(item.title)
                     elif self.item_label_display_int==3:
                         if item.has_tags():
                             display_text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
                         else:
-                            display_text='{0}@{1} <{2}>'.format('tag', item.title, item.status)
+                            display_text='{0} <{1}>'.format(item.title, item.status)
 
                     x,y,right,bottom=self.canvas.coords(item.object_id)
                     object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
@@ -848,8 +885,7 @@ class Timeline():
                 del self._map_object_id_to_item_key[object_id]
                 self.canvas.delete(item.key)
                 self.draw_item(item)
-                # Make sure we save changes to timeline database.
-                self.save()
+                item.save()
                 if self.cbfunc and item.type != 'image':
                     self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
             else:
@@ -901,14 +937,6 @@ class Timeline():
         self.items.delete(key=key, save=True)
         self.draw_items()
 
-    def save(self):
-        self.items.save()
-        
-    def _save_timeline_begin_times(self):
-        self.hourly['dragging_begin_time']=self.hourly['begin_time']
-        self.daily['dragging_begin_time']=self.daily['begin_time']
-        self.monthly['dragging_begin_time']=self.monthly['begin_time']
-
     def _set_status_text_for_item(self):
         debug('Timeline._set_status_text_for_item')
         if self.temp['object_id']:
@@ -923,14 +951,6 @@ class Timeline():
                 item.status=form.text
                 self.draw_item(item)
             self.canvas.focus_force()
-
-    def _set_first_label_time(self):
-        """
-        Calculates the time of the first label for each timeline using the current begin_time.
-        """
-        self.hourly['first_label']=self.hourly['begin_time'].replace(minute=0, second=0, microsecond=0)
-        self.daily['first_label']=self.daily['begin_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-        self.monthly['first_label']=self.monthly['begin_time'].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
     def _show_item_menu(self, event):
         debug('Timeline._show_item_menu')
@@ -949,19 +969,16 @@ class Timeline():
         if self.keyboard.shift_key_down:
             self.keyboard.shift_key_down=False
             self._timeline_mouse_click_add_item(event.x, event.y)
-        else:
-            self._save_timeline_begin_times()
-
-            if t:
-                self._dragging['timeline']=t
-                # Required in order to capture keypress events.
-                self.canvas.focus_set()
-                debug('timeline={}'.format(t))
-            else:
-                self._dragging={}
-                critical('ERROR: Could not locate a timeline on mouse down click!')
+        elif t:
+            #self._save_timeline_begin_times()
+            self._dragging['timeline']=t
+            self._dragging['timeline_time']=self.timeline_time
             # Need a reference to the original mouse down item.
             self._dragging['x']=event.x
+            # Required in order to capture keypress events.
+            self.canvas.focus_set()
+        else:
+            self._dragging={}
 
     def _timeline_mouse_click_add_item(self, x, y):
         timeline=self._get_timeline_from_xy(x, y)
@@ -975,9 +992,10 @@ class Timeline():
                 text=''
             )
             if form.text:
-                new_item=NewItem(text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+                new_item=NewItem(root_path=self.default_item_path, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
                 key=new_item.key
                 self.items.items[key]=new_item
+                new_item.save()
                 # Do not save here, save will occur on the draw since this is a new item.
                 self.draw_item(new_item)
                 if self.cbfunc:
@@ -989,10 +1007,8 @@ class Timeline():
 
     def _timeline_mouse_doubleclick(self, event):
         debug2('_timeline_mouse_doubleclick')
-        t=self._get_time_from_xy(event.x, event.y)
-        for timeline in self.timelines:
-            timeline['begin_time']=t-datetime.timedelta(days=timeline['total_days']/2)
-            self._timelines_draw_details()
+        self.timeline_time=self._get_time_from_xy(event.x, event.y)
+        self._timelines_draw_details()
 
     def _timeline_mouse_motion(self, event):
         if self.keyboard.shift_key_down:
@@ -1001,10 +1017,9 @@ class Timeline():
             self.statusbox.clear()
 
     def _timeline_mouse_drag(self, event):
-        debug2("_timeline_mouse_drag")
+        debug2("Timeline._timeline_mouse_drag")
 
         if "timeline" not in self._dragging.keys():
-            critical('timeline not in _dragging.keys!')
             return
 
         t=self._dragging['timeline']
@@ -1015,18 +1030,11 @@ class Timeline():
                 return
 
             days=x/self.width*t['total_days']*-1
-
-            self.monthly['begin_time']=self.monthly['dragging_begin_time']+datetime.timedelta(days=days)
-            self.daily['begin_time']=self.monthly['begin_time']+datetime.timedelta(days=self.monthly['total_days']/2)-datetime.timedelta(days=self.daily['total_days']/2)
-            self.hourly['begin_time']=self.monthly['begin_time']+datetime.timedelta(days=self.monthly['total_days']/2)-datetime.timedelta(days=self.hourly['total_days']/2)
-
-            self.timeline_time=self.monthly['begin_time']+datetime.timedelta(days=self.monthly['total_days']/2)
+            self.timeline_time=self._dragging['timeline_time']+datetime.timedelta(days=days)
             self._display_time_with_text(self.timeline_time)
 
             self._timelines_draw_details()
             self.draw_items()
-        else:
-            critical('ERROR: timeline not found while dragging!')
 
     def _timeline_mouse_up(self, event):
         debug2("timeline_mouse_up")
@@ -1035,7 +1043,7 @@ class Timeline():
         self.statusbox.clear()
 
     def _timelines_draw(self):
-        debug2('_timelines_draw')
+        debug2('Timeline._timelines_draw')
         self.canvas.delete("timelines")
         for t in self.timelines:
             t['right']=self.x+self.width
@@ -1049,11 +1057,18 @@ class Timeline():
     def _timelines_draw_details(self):
         debug2('Timeline._timelines_draw_details')
         self.canvas.delete("timeline_detail")
-        # Recalculate the time of first label for each timeline using current begin_time.
-        self._set_first_label_time()
+        
+        for t in self.timelines:
+            t['begin_time']=self.timeline_time-datetime.timedelta(days=t['total_days']/2)
+            t['end_time']=self.timeline_time+datetime.timedelta(days=t['total_days']/2)
+            
+        self.hourly['first_label']=self.hourly['begin_time'].replace(minute=0, second=0, microsecond=0)
+        self.daily['first_label']=self.daily['begin_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+        self.monthly['first_label']=self.monthly['begin_time'].replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
         for t in self.timelines:
             font_size={'hourly':'<<', 'daily': '<<', 'monthly': '<<'}[t['name']]
-            t['end_time']=t['begin_time']+datetime.timedelta(days=t['total_days'])
+            # Get the X position of the first label.
             x=self._get_x_from_time(t['first_label'], t['begin_time'], t['total_days'], self.width)
             label_time=t['first_label']
             for i in range(1,100):
@@ -1071,7 +1086,7 @@ class Timeline():
                     break
 
             # Draw red line in middle of timeline.
-            x=self._get_x_from_time(t['begin_time']+datetime.timedelta(days=t['total_days']/2), t['begin_time'], t['total_days'], self.width)
+            x=self._get_x_from_time(self.timeline_time, t['begin_time'], t['total_days'], self.width)
             self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='red', tags="timeline_detail")
 
             # Draw blue line at current time.
