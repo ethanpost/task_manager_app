@@ -1,12 +1,7 @@
 __author__ = 'Ethan Post'
 
-import tkinter as tk
-import os
-from bin import *
-import time
-from PIL import ImageTk, Image, ImageOps
 from debug import *
-from collections import OrderedDict
+import copy
 
 class Keyboard():
 
@@ -44,7 +39,7 @@ class Keyboard():
                 self.escape_key_down=True
             elif event.keycode==112:
                 self.f1_key_down=True
-                
+
         if self.cbfunc:
             self.cbfunc({'cbkey': self.KEYPRESS, 'state': event.state, 'keycode':event.keycode})
 

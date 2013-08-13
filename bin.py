@@ -82,21 +82,24 @@ def nvl(var, value_if_none):
     else:
         return var
 
-def write(file_name, text=[]):
+def write(file_name, text):
+    t=[]
     if type(text) != list:
-        text=(text)
+        t.append(text)
+    else:
+        t=text
     f=open(file_name, 'a')
-    for line in text:
-        f.write(line+'\n')
+    for l in t:
+        f.write(l+'\n')
     f.close()
 
 class reverse_logger():
-    def __init__(self, *args, **kwargs):
-        self._filepath=kwargs['filepath']
+    def __init__(self, file_path):
+        self._filepath=file_path
         self._f=None
         self._buffer=[]
-        if not os.path.exists(
-            self._filepath):
+        if not os.path.exists(self._filepath):
+            # Just create the missing file.
             open(self._filepath, 'w').close()
 
     def write(self, text):

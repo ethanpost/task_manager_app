@@ -9,7 +9,8 @@ class App(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
 
-        self.wm_title('Nudge|Pipeline')
+        self.wm_title('task_manager_app')
+        self.version=0
 
         timeline_height=(100,85,70)
         statusbox_height=25

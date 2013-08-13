@@ -28,11 +28,20 @@ class ItemForm():
         self.title_var=tk.StringVar()
         self._draw()
 
+
+    def _update_status_history(self):
+        self.history_box.configure(state=tk.NORMAL)
+        self.history_box.delete(1.0, tk.END)
+        with open(self.item.status_log_file_path, 'r') as f:
+            for l in f:
+                self.history_box.insert(tk.END, l)
+        self.history_box.configure(state=tk.DISABLED)
+
     def _close_form(self):
         debug('ItemForm._close_form')
         self.item.title=self.title_var.get()
         self.item.description=self._get_description()
-        self.item.tags=self.tags_var.get()
+        self.item.tags=self.tags_var.get().split(',')
         self.item.save()
         self.form.destroy()
 
@@ -87,24 +96,16 @@ class ItemForm():
         # Status history.
         history_bar=tk.Scrollbar(status_frame)
         history_bar.pack(side=tk.RIGHT, fill=tk.Y)
-        if len(item.status_history) <= 6:
-            history_box_height=4
-        else:
-            history_box_height=6
-
+        history_box_height=5
         self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='<'),
                                  relief=tk.FLAT, width=self.widget_width, fg='dark grey')
         self.history_box.pack(side=tk.TOP, fill=tk.X)
-
-        for text in item.status_history:
-            self.history_box.insert(tk.END, text+'\n')
-
         self.history_box.configure(yscrollcommand=history_bar.set)
         history_bar.configure(command=self.history_box.yview)
-
-        self.history_box.configure(state=tk.DISABLED)
+        self._update_status_history()
 
         # Tags
+        debug('item.tags={}'.format(item.tags))
         tags_frame=tk.Frame(self.form)
         tags_frame.pack(fill=tk.X, padx=2, pady=2)
         tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size='<'), anchor="w", width="10", relief=tk.FLAT, fg='black')
@@ -134,18 +135,19 @@ class ItemForm():
         self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
         description_box_height=6
         self.description_box=tk.Text(description_frame, height=description_box_height, borderwidth=1,
-                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width)
+                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
+                                     bg='light grey')
         self.description_box.pack(side=tk.TOP, fill=tk.X)
         self.description_box.configure(yscrollcommand=self.description_bar.set)
         self.description_bar.configure(command=self.description_box.yview)
-        self._set_description_box_text()
+        self._set_description_box_text(self.item.description)
+        self._disable_description()
 
         self.description_box.bind('<Tab>', self._focus_set_status_box)
         self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
-        self.description_box.bind('<FocusOut>', self._focus_out_description)
+        #self.description_box.bind('<FocusOut>', self._focus_out_description)
         #self.description_box.bind('<Control-a>', self._select_all_description)
         self.description_box.bind('<Key>', self._keypress_description)
-
 
     def _enable_description(self):
         self.description_box.configure(state=tk.NORMAL)
@@ -154,9 +156,8 @@ class ItemForm():
         self.title_box.configure(state=tk.NORMAL)
         self.title_box.focus_set()
         self._pack_description()
-        if self.item.description is None:
-            self._enable_description()
-
+        self._enable_description()
+        
     def _focus_in_tags(self, event):
         self.tags_box.select_range(tk.END, tk.END)
         
@@ -190,12 +191,10 @@ class ItemForm():
         if event.state==8 and event.keycode==13:
             # Enter
             if self.status_var.get() not in ('', self._status_doc):
-                self.history_box.configure(state=tk.NORMAL)
                 self.item.status=self.status_var.get()
-                self.history_box.insert(1.0, self.item.status_history[0]+'\n')
                 self.status_var.set(self._status_doc)
-                self.history_box.configure(state=tk.DISABLED)
                 self._focus_in_status()
+            self._update_status_history()
         elif event.state==8 and event.keycode==27:
             # Escape
             self.status_var.set(self._status_doc)
@@ -205,30 +204,26 @@ class ItemForm():
 
     def _keypress_title(self, event):
         debug('ItemForm._keypress_title: state={0} keycode={1}'.format(event.state, event.keycode))
-        if event.state==8 and event.keycode==13:
-            # Enter
-            self.item.title=self.title_var.get()
-            self.title_box.configure(state=tk.DISABLED)
-        elif event.state==8 and event.keycode==27:
+        if event.state==8 and event.keycode==27:
             # Escape
-            self.title_var.set(self.item.title)
+            self.title_var.set(self.copy_of_item.title)
             self._select_all_title()
 
+        self.item.title=self.title_var.get()
+
     def _keypress_description(self, event):
-        if event.state==8 and event.keycode==13:
-            # Enter
-            None
-        elif event.state==8 and event.keycode==27:
+        if event.state==8 and event.keycode==27:
             # Escape
-            self._set_description_box_text()
+            self._set_description_box_text(self.copy_of_item.description)
+        if self._get_description().startswith(self._description_doc):
+            self.item.description=None
+        else:
+            self.item.description=self._get_description()
 
     def _keypress_tags(self, event):
-        if event.state==8 and event.keycode==13:
-            # Enter
-            None
-        elif event.state==8 and event.keycode==27:
+        if event.state==8 and event.keycode==27:
             # Escape
-            self.tags_var.set(','.join(self.item.tags))
+            self.tags_var.set(','.join(self.copy_of_item.tags))
 
     def _pack_description(self):
         self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -247,13 +242,11 @@ class ItemForm():
     def _select_all_description(self, event=None):
         self.description_box.tag_add("sel","1.0","end")
 
-    def _set_description_box_text(self):
+    def _set_description_box_text(self, text=None):
         debug('ItemForm: _set_description_box_text')
+        text=bin.nvl(text, self._description_doc)
         self.description_box.delete('1.0', tk.END)
-        if self.item.description:
-            self.description_box.insert('1.0', self.item.description)
-        else:
-            self.description_box.insert('1.0', self._description_doc)
+        self.description_box.insert('1.0', text)
         self._select_all_description()
 
     def test(self, event):
@@ -294,13 +287,13 @@ class Item():
         self.datetime=None
         self.tags=[]
         self._status=None
-        self.status_history=[]
         self.directory=None
         self.object_id=None
         self.description=None
         self._deleted=False
         self.private=True
         self.version=0
+        self.status_log_file_path=None
 
     @property
     def text (self):
@@ -318,7 +311,11 @@ class Item():
     @status.setter
     def status(self, text):
         # Status history is stored in a list, with most recent status first, we also add a timestamp.
-        self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text)
+        # self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n')
+        text=bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n'
+        log=bin.reverse_logger(self.status_log_file_path)
+        log.write(text)
+        log.close()
         self._status=text
 
     @property
@@ -388,7 +385,7 @@ class Item():
             b=text.rfind('<')
             e=text.rfind('>')
             if b < e:
-                self.status=text[b+1:e]
+                self._status=text[b+1:e]
                 text=text[0:b]+text[e+1:]
 
         debug('! status={0} text={1}'.format(self.status, text))
@@ -430,7 +427,6 @@ class NewItem(Item):
         self.y=y
         # None marks a new item when drawing.
         self.state=None
-        self.status='Created'
         self.datetime=dt
         
         # This action will end up setting the title, tags and status.
@@ -440,11 +436,15 @@ class NewItem(Item):
         if not self.title:
             self.title=text
 
-        self.directory=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title))
+        self.directory=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
     
         bin.mkdir(self.directory)
 
-        bin.write(file_name=os.path.join(self.directory, 'status.txt'), text=self.status)
+        self.status_log_file_path=os.path.join(self.directory, 'status.txt')
+        if self._status:
+            self.status=self._status
+        else:
+            self.status='Created'
 
 class Items():
     def __init__(self, root_dir):
@@ -620,6 +620,8 @@ class Timeline():
 
         self.draw_items()
 
+        self.mouse=(0, 0)
+
         # Just a temporary dict which we can use for this and that.
         self.temp={}
 
@@ -746,8 +748,6 @@ class Timeline():
         f=open(file_name, mode='w')
         for item in self.items.all_items():
             f.write(item.title+'\n')
-            for status in item.status_history:
-                f.write("   "+status+'\n')
         f.close()
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
@@ -794,8 +794,24 @@ class Timeline():
     
     def keypress(self, dict):
         debug('Timeline.keypress: {}'.format(dict))
-        # F1 key press
-        if dict['state']==8 and dict['keycode']==112:
+
+        timeline=self._get_timeline_from_xy(x=self.mouse[0], y=self.mouse[1])
+
+        if timeline:
+            move_days={'hourly': 15/1440, 'daily': 8/24, 'monthly': 4}[timeline['name']]
+
+        if dict['state']==262152 and dict['keycode']==37:
+            # Left Arrow
+            self.timeline_time=self.timeline_time+datetime.timedelta(days=move_days)
+            self._timelines_draw_details()
+            self.draw_items()
+        elif dict['state']==262152 and dict['keycode']==39:
+            # Right Arrow
+            self.timeline_time=self.timeline_time-datetime.timedelta(days=move_days)
+            self._timelines_draw_details()
+            self.draw_items()
+        elif dict['state']==8 and dict['keycode']==112:
+            # F1 Key
             # 0 Nothing displayed next to item.
             # 1 Title
             # 2 tag@title
@@ -825,6 +841,7 @@ class Timeline():
 
     def _item_mouse_over(self, event):
         debug2('Timeline._item_mouse_over')
+        self.mouse=(event.x, event.y)
         if not self._is_item_being_dragged():
             object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
             if object_id:
@@ -848,6 +865,7 @@ class Timeline():
 
     def _item_mouse_drag(self, event):
         debug2('_item_mouse_drag')
+        self.mouse=(event.x, event.y)
         if 'object_id' in self._dragging:
             object_id=self._dragging['object_id']
             coords=self.canvas.coords(object_id)
@@ -865,6 +883,7 @@ class Timeline():
 
     def _item_mouse_up(self, event):
         debug2('_item_mouse_up')
+        self.mouse=(event.x, event.y)
 
         if 'object_id' not in self._dragging:
             return
@@ -902,7 +921,10 @@ class Timeline():
         object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
         key=self._get_item_key_from_object_id(object_id)
         item=self.items.get_by_key(key)
+        self.root.config(cursor='wait')
         f=ItemForm(root=self.root, theme=self.theme, item=item)
+        self.root.configure(cursor='')
+        self.root.update_idletasks()
         #self.open_form_for_item(key)
         #self.canvas.focus_force()
 
@@ -963,6 +985,7 @@ class Timeline():
 
     def _timeline_mouse_click(self, event):
         debug('Timeline._timeline_mouse_click')
+        self.mouse=(event.x, event.y)
         # Determine which timeline was clicked on.
         t=self._get_timeline_from_xy(event.x, event.y)
 
@@ -1011,6 +1034,7 @@ class Timeline():
         self._timelines_draw_details()
 
     def _timeline_mouse_motion(self, event):
+        self.mouse=(event.x, event.y)
         if self.keyboard.shift_key_down:
             self._display_time_with_text(self._get_time_from_xy(event.x, event.y))
         else:
@@ -1018,6 +1042,8 @@ class Timeline():
 
     def _timeline_mouse_drag(self, event):
         debug2("Timeline._timeline_mouse_drag")
+
+        self.mouse=(event.x, event.y)
 
         if "timeline" not in self._dragging.keys():
             return
