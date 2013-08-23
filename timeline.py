@@ -13,13 +13,99 @@ import datetime
 import theme
 import copy
 
+COLORS=['red', 'yellow']
+
+XCOLORS=['red', 'orange', 'yellow', 'aquamarine2', 'lime green', 'lawn green', 'light sea green',
+            'green yellow', 'light sky blue', 'white', 'SlateBlue1']
+
+NEW_COLORS=['snow', 'ghost white', 'white smoke', 'gainsboro', 'floral white', 'old lace',
+    'linen', 'antique white', 'papaya whip', 'blanched almond', 'bisque', 'peach puff',
+    'navajo white', 'lemon chiffon', 'mint cream', 'azure', 'alice blue', 'lavender',
+    'lavender blush', 'misty rose', 'dark slate gray', 'dim gray', 'slate gray',
+    'light slate gray', 'gray', 'light grey', 'midnight blue', 'navy', 'cornflower blue', 'dark slate blue',
+    'slate blue', 'medium slate blue', 'light slate blue', 'medium blue', 'royal blue',  'blue',
+    'dodger blue', 'deep sky blue', 'sky blue', 'light sky blue', 'steel blue', 'light steel blue',
+    'light blue', 'powder blue', 'pale turquoise', 'dark turquoise', 'medium turquoise', 'turquoise',
+    'cyan', 'light cyan', 'cadet blue', 'medium aquamarine', 'aquamarine', 'dark green', 'dark olive green',
+    'dark sea green', 'sea green', 'medium sea green', 'light sea green', 'pale green', 'spring green',
+    'lawn green', 'medium spring green', 'green yellow', 'lime green', 'yellow green',
+    'forest green', 'olive drab', 'dark khaki', 'khaki', 'pale goldenrod', 'light goldenrod yellow',
+    'light yellow', 'yellow', 'gold', 'light goldenrod', 'goldenrod', 'dark goldenrod', 'rosy brown',
+    'indian red', 'saddle brown', 'sandy brown',
+    'dark salmon', 'salmon', 'light salmon', 'orange', 'dark orange',
+    'coral', 'light coral', 'tomato', 'orange red', 'red', 'hot pink', 'deep pink', 'pink', 'light pink',
+    'pale violet red', 'maroon', 'medium violet red', 'violet red',
+    'medium orchid', 'dark orchid', 'dark violet', 'blue violet', 'purple', 'medium purple',
+    'thistle', 'snow2', 'snow3',
+    'snow4', 'seashell2', 'seashell3', 'seashell4', 'AntiqueWhite1', 'AntiqueWhite2',
+    'AntiqueWhite3', 'AntiqueWhite4', 'bisque2', 'bisque3', 'bisque4', 'PeachPuff2',
+    'PeachPuff3', 'PeachPuff4', 'NavajoWhite2', 'NavajoWhite3', 'NavajoWhite4',
+    'LemonChiffon2', 'LemonChiffon3', 'LemonChiffon4', 'cornsilk2', 'cornsilk3',
+    'cornsilk4', 'ivory2', 'ivory3', 'ivory4', 'honeydew2', 'honeydew3', 'honeydew4',
+    'LavenderBlush2', 'LavenderBlush3', 'LavenderBlush4', 'MistyRose2', 'MistyRose3',
+    'MistyRose4', 'azure2', 'azure3', 'azure4', 'SlateBlue1', 'SlateBlue2', 'SlateBlue3',
+    'SlateBlue4', 'RoyalBlue1', 'RoyalBlue2', 'RoyalBlue3', 'RoyalBlue4', 'blue2', 'blue4',
+    'DodgerBlue2', 'DodgerBlue3', 'DodgerBlue4', 'SteelBlue1', 'SteelBlue2',
+    'SteelBlue3', 'SteelBlue4', 'DeepSkyBlue2', 'DeepSkyBlue3', 'DeepSkyBlue4',
+    'SkyBlue1', 'SkyBlue2', 'SkyBlue3', 'SkyBlue4', 'LightSkyBlue1', 'LightSkyBlue2',
+    'LightSkyBlue3', 'LightSkyBlue4', 'SlateGray1', 'SlateGray2', 'SlateGray3',
+    'SlateGray4', 'LightSteelBlue1', 'LightSteelBlue2', 'LightSteelBlue3',
+    'LightSteelBlue4', 'LightBlue1', 'LightBlue2', 'LightBlue3', 'LightBlue4',
+    'LightCyan2', 'LightCyan3', 'LightCyan4', 'PaleTurquoise1', 'PaleTurquoise2',
+    'PaleTurquoise3', 'PaleTurquoise4', 'CadetBlue1', 'CadetBlue2', 'CadetBlue3',
+    'CadetBlue4', 'turquoise1', 'turquoise2', 'turquoise3', 'turquoise4', 'cyan2', 'cyan3',
+    'cyan4', 'DarkSlateGray1', 'DarkSlateGray2', 'DarkSlateGray3', 'DarkSlateGray4',
+    'aquamarine2', 'aquamarine4', 'DarkSeaGreen1', 'DarkSeaGreen2', 'DarkSeaGreen3',
+    'DarkSeaGreen4', 'SeaGreen1', 'SeaGreen2', 'SeaGreen3', 'PaleGreen1', 'PaleGreen2',
+    'PaleGreen3', 'PaleGreen4', 'SpringGreen2', 'SpringGreen3', 'SpringGreen4',
+    'green2', 'green3', 'green4', 'chartreuse2', 'chartreuse3', 'chartreuse4',
+    'OliveDrab1', 'OliveDrab2', 'OliveDrab4', 'DarkOliveGreen1', 'DarkOliveGreen2',
+    'DarkOliveGreen3', 'DarkOliveGreen4', 'khaki1', 'khaki2', 'khaki3', 'khaki4',
+    'LightGoldenrod1', 'LightGoldenrod2', 'LightGoldenrod3', 'LightGoldenrod4',
+    'LightYellow2', 'LightYellow3', 'LightYellow4', 'yellow2', 'yellow3', 'yellow4',
+    'gold2', 'gold3', 'gold4', 'goldenrod1', 'goldenrod2', 'goldenrod3', 'goldenrod4',
+    'DarkGoldenrod1', 'DarkGoldenrod2', 'DarkGoldenrod3', 'DarkGoldenrod4',
+    'RosyBrown1', 'RosyBrown2', 'RosyBrown3', 'RosyBrown4', 'IndianRed1', 'IndianRed2',
+    'IndianRed3', 'IndianRed4', 'sienna1', 'sienna2', 'sienna3', 'sienna4', 'burlywood1',
+    'burlywood2', 'burlywood3', 'burlywood4', 'wheat1', 'wheat2', 'wheat3', 'wheat4', 'tan1',
+    'tan2', 'tan4', 'chocolate1', 'chocolate2', 'chocolate3', 'firebrick1', 'firebrick2',
+    'firebrick3', 'firebrick4', 'brown1', 'brown2', 'brown3', 'brown4', 'salmon1', 'salmon2',
+    'salmon3', 'salmon4', 'LightSalmon2', 'LightSalmon3', 'LightSalmon4', 'orange2',
+    'orange3', 'orange4', 'DarkOrange1', 'DarkOrange2', 'DarkOrange3', 'DarkOrange4',
+    'coral1', 'coral2', 'coral3', 'coral4', 'tomato2', 'tomato3', 'tomato4', 'OrangeRed2',
+    'OrangeRed3', 'OrangeRed4', 'red2', 'red3', 'red4', 'DeepPink2', 'DeepPink3', 'DeepPink4',
+    'HotPink1', 'HotPink2', 'HotPink3', 'HotPink4', 'pink1', 'pink2', 'pink3', 'pink4',
+    'LightPink1', 'LightPink2', 'LightPink3', 'LightPink4', 'PaleVioletRed1',
+    'PaleVioletRed2', 'PaleVioletRed3', 'PaleVioletRed4', 'maroon1', 'maroon2',
+    'maroon3', 'maroon4', 'VioletRed1', 'VioletRed2', 'VioletRed3', 'VioletRed4',
+    'magenta2', 'magenta3', 'magenta4', 'orchid1', 'orchid2', 'orchid3', 'orchid4', 'plum1',
+    'plum2', 'plum3', 'plum4', 'MediumOrchid1', 'MediumOrchid2', 'MediumOrchid3',
+    'MediumOrchid4', 'DarkOrchid1', 'DarkOrchid2', 'DarkOrchid3', 'DarkOrchid4',
+    'purple1', 'purple2', 'purple3', 'purple4', 'MediumPurple1', 'MediumPurple2',
+    'MediumPurple3', 'MediumPurple4', 'thistle1', 'thistle2', 'thistle3', 'thistle4',
+    'gray1', 'gray2', 'gray3', 'gray4', 'gray5', 'gray6', 'gray7', 'gray8', 'gray9', 'gray10',
+    'gray11', 'gray12', 'gray13', 'gray14', 'gray15', 'gray16', 'gray17', 'gray18', 'gray19',
+    'gray20', 'gray21', 'gray22', 'gray23', 'gray24', 'gray25', 'gray26', 'gray27', 'gray28',
+    'gray29', 'gray30', 'gray31', 'gray32', 'gray33', 'gray34', 'gray35', 'gray36', 'gray37',
+    'gray38', 'gray39', 'gray40', 'gray42', 'gray43', 'gray44', 'gray45', 'gray46', 'gray47',
+    'gray48', 'gray49', 'gray50', 'gray51', 'gray52', 'gray53', 'gray54', 'gray55', 'gray56',
+    'gray57', 'gray58', 'gray59', 'gray60', 'gray61', 'gray62', 'gray63', 'gray64', 'gray65',
+    'gray66', 'gray67', 'gray68', 'gray69', 'gray70', 'gray71', 'gray72', 'gray73', 'gray74',
+    'gray75', 'gray76', 'gray77', 'gray78', 'gray79', 'gray80', 'gray81', 'gray82', 'gray83',
+    'gray84', 'gray85', 'gray86', 'gray87', 'gray88', 'gray89', 'gray90', 'gray91', 'gray92',
+    'gray93', 'gray94', 'gray95', 'gray97', 'gray98', 'gray99']
+
 class ItemForm():
-    def __init__(self, root, theme, item):
+
+    CLOSE_FORM=23750
+    
+    def __init__(self, root, theme, item, cbfunc=None):
         self.form=tk.Toplevel(root)
         self.form.protocol("WM_DELETE_WINDOW", self._close_form)
         self.form.bind_class("Text","<Control-a>", self.select_all)
         self.form.bind_class("Entry","<Control-a>", self.select_all)
         self.theme=theme
+        self.cbfunc=cbfunc
         self._status_doc='<Enter Status or #Milestone>'
         self._description_doc='<Enter Description>'
         self.widget_width=75
@@ -27,7 +113,6 @@ class ItemForm():
         self.copy_of_item=copy.deepcopy(item)
         self.title_var=tk.StringVar()
         self._draw()
-
 
     def _update_status_history(self):
         self.history_box.configure(state=tk.NORMAL)
@@ -43,6 +128,8 @@ class ItemForm():
         self.item.description=self._get_description()
         self.item.tags=self.tags_var.get().split(',')
         self.item.save()
+        if self.cbfunc:
+            self.cbfunc({'cbkey': self.CLOSE_FORM})
         self.form.destroy()
 
     def _disable_description(self):
@@ -266,6 +353,11 @@ class ItemForm():
             self.item.tags=self.tags_var.get().split(',')
 
 class Item():
+
+    COLORS=['white', 'grey', 'black', 'green', 'blue', 'yellow', 'red']
+    XCOLORS=['red', 'orange', 'yellow', 'aquamarine2', 'lime green', 'lawn green', 'light sea green',
+            'green yellow', 'light sky blue', 'white', 'SlateBlue1']
+    
     def __init__(self, root_path, *args, **kwargs):
         self.root_path=root_path
         # Unique 20 character key generated automatically.
@@ -294,6 +386,15 @@ class Item():
         self.private=True
         self.version=0
         self.status_log_file_path=None
+        self.color='white'
+        self.selected=False
+        self.drags=True
+
+    def init(self):
+        """
+        Some housekeeping when we initially load the item from the .dat file.
+        """
+        self.selected=False
 
     @property
     def text (self):
@@ -328,6 +429,7 @@ class Item():
             self._deleted=True
             # Save must occur before the move or it recreates the original directory.
             self.save()
+            debug('*** Moving {} to _deleted_'.format(self.directory))
             bin.mv(self.directory, os.path.join(self.directory, '..', '_deleted_'))
         else:
             self._deleted=False
@@ -450,14 +552,18 @@ class Items():
     def __init__(self, root_dir):
 
         self.items={}
-        # Find all _data_ directories
+
         deleted=re.compile('.*_deleted_.*')
+        # Find all items. Each item has a _data_ directory.
         for data_dir in bin.find(root=root_dir, type='d', name='_data_'):
-            debug('data_dir: {}'.format(data_dir))
+            debug2('data_dir: {}'.format(data_dir))
+            # Ignore anything with _deleted_ in the path.
             if not re.match(deleted, data_dir):
+                # The item is stored in the .dat file.
                 for file in bin.find(root=data_dir, type='f', name='.*\.dat'):
                     key=os.path.basename(file).replace('.dat', '')
                     self.items[key]=bin.open_database2(file.replace('.dat', ''))
+                    self.items[key].init()
 
         # if the item is not shared and not the same version, patch it and save
         # if the item is shared and the version does not match mark it as read only
@@ -469,10 +575,20 @@ class Items():
         self.patch()
 
     def patch(self):
-       None
+        for item in self.all_items():
+            if item.color is None:
+                item.color='white'
+            if not hasattr(item, 'drags'):
+                item.drags=True
+        item.selected=None
 
     def all_items(self):
         return self.items.values()
+
+    def all_selected_items(self):
+        for item in self.all_items():
+            if item.selected and not item.deleted:
+                yield item
 
     def get_by_key(self, key):
         return self.items[key]
@@ -483,6 +599,10 @@ class Items():
         """
         self.items[key].deleted=True
         del self.items[key]
+
+    def save(self):
+        for item in self.all_items():
+            item.save()
 
 class Timeline():
 
@@ -502,6 +622,8 @@ class Timeline():
         self.theme=theme.Theme()
 
         self.item_label_display_int=0
+
+        self.root.protocol("WM_DELETE_WINDOW", self._close)
 
         if 'keyboard' in kwargs.keys():
             self.keyboard=kwargs['keyboard']
@@ -627,6 +749,13 @@ class Timeline():
 
         self._build_menus()
 
+        self._timeline_for_selected_item=None
+
+    def add_tag_to_object(self, object_id, tag):
+        tags=self.canvas.gettags(object_id)
+        if tag not in tags:
+            self.canvas.addtag_withtag(tag, object_id)
+
     def _adjust_timeline_total_days(self, timeline, more_days=None, less_days=None):
         if more_days:
             negative_or_positive=+1
@@ -643,13 +772,42 @@ class Timeline():
         self.draw_items()
 
     def _timeline_mouse_wheel(self, event):
-        debug('Timeline._timeline_mouse_wheel: {0} {1} {2} {3}'.format(event.keycode, event.x, event.y, event.delta))
-        timeline=self._get_timeline_from_xy(event.x, event.y)
-        if timeline:
+
+        # TopLevel window (ItemForm) detects mousewheel and triggers event on root window. limiting widgetName to
+        # canvas seems to fix the issue for now.
+        if event.widget.widgetName != 'canvas':
+            return
+        
+        debug('Timeline._timeline_mouse_wheel')
+
+        object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
+        if object_id:
+            key=self._get_item_key_from_object_id(object_id)
+            item=self.items.get_by_key(key)
+            debug('keycode={0} index={1} len={2}'.format(event.keycode, item.COLORS.index(item.color), len(item.COLORS)))
             if event.keycode==120:
-                self._adjust_timeline_total_days(timeline, more_days=True)
-            elif event.keycode==-120:
-                self._adjust_timeline_total_days(timeline, less_days=True)
+                index=item.COLORS.index(item.color)
+                if index==0:
+                    index=len(item.COLORS)-1
+                else:
+                    index-=1
+            else:
+                index=item.COLORS.index(item.color)
+                if index==len(item.COLORS)-1:
+                    index=0
+                else:
+                    index+=1
+            item.color=item.COLORS[index]
+            self.draw_item(item)
+            # self.statusbox.text=item.color
+            # debug('color: {}'.format(item.color))
+        else:
+            timeline=self._get_timeline_from_xy(event.x, event.y)
+            if timeline:
+                if event.keycode==120:
+                    self._adjust_timeline_total_days(timeline, more_days=True)
+                elif event.keycode==-120:
+                    self._adjust_timeline_total_days(timeline, less_days=True)
 
     def _build_menus(self):
         """
@@ -661,12 +819,14 @@ class Timeline():
         #self.menu.add_separator()
         #self.menu.add_command(label="Rename", command=self._open_item_rename_form)
 
-    def delete_item_by_key(self, key):
-        debug('Timeline.delete_item_by_key')
-        self.items.delete_by_key(key, save=True)
-        self.draw_items()
-        if self.cbfunc:
-            self.cbfunc({'cbkey': self.DELETE_ITEM_FROM_TIMELINE, 'key': key})
+    def callback(self, dict):
+        cbkey=dict['cbkey']
+        if cbkey==ItemForm.CLOSE_FORM:
+            self.draw_items()
+            
+    def _close(self):
+        self.items.save()
+        self.root.destroy()
 
     def _display_time_with_text(self, time, text=None):
         debug2('Timeline._display_time_with_text')
@@ -679,15 +839,18 @@ class Timeline():
 
     def draw_items(self):
         debug('Timeline.draw_items')
-        self.canvas.delete('all_items_and_labels')
+        self.canvas.delete('all_items')
         self._map_object_id_to_item_key={}
         # ToDo: Probably needs to be changed to an iterator.
         for item in self.items.all_items():
             self.draw_item(item, delete_first=False)
 
     def draw_item(self, item, delete_first=True):
-        debug('Timeline.draw_item')
+        debug2('Timeline.draw_item')
 
+        if item.deleted:
+            return
+        
         # If this is a new item.
         if not item.state:
             item.y_as_pct_of_height=self._get_y_as_pct_of_height_from_xy(item.x, item.y)
@@ -699,18 +862,29 @@ class Timeline():
         if delete_first:
             self.canvas.delete(item.key)
 
-        item_tags='all_items_and_labels item drags ' + item.key
-        label_tags='all_items_and_labels ' + item.key
+        label_tags=' '.join(['all_items', item.key])
             
         for timeline in self.timelines:
             if item.datetime >= timeline['begin_time'] and item.datetime <= timeline['end_time']:
 
+                item_tags=' '.join(['all_items', 'item', 'drags', item.key, timeline['name']])
+                
                 size=item.size*{'hourly': 1, 'daily': .8, 'monthly': .8*.8}[timeline['name']]
 
                 x=bin.days_between_two_dates(item.datetime, timeline['begin_time'])/timeline['total_days']*self.width
                 y=timeline['y']+(timeline['height']*item.y_as_pct_of_height)
+                if item.selected and self._timeline_for_selected_item==timeline['name']:
+                    item_borderwidth=2
+                    item_outline='black'
+                    item_dash=(1,2)
+                    item_tags=item_tags + ' selected'
+                else:
+                    item_borderwidth=1
+                    item_outline='black'
+                    item_dash=None
                 if item.shape=='rectangle':
-                    item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill='green', outline='black', tags=item_tags, stipple=None, activefill='black')
+                    item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill=item.color, outline=item_outline, tags=item_tags, stipple=None,
+                                                                width=item_borderwidth, dash=item_dash)
                 elif item.image_path:
                     thumb_key='{0}_{1}'.format(item.key, timeline['name'])
                     # ToDo: Iterator here?
@@ -747,11 +921,14 @@ class Timeline():
     def dump(self, file_name):
         f=open(file_name, mode='w')
         for item in self.items.all_items():
-            f.write(item.title+'\n')
+            if not item.deleted:
+                f.write(item.title+'\n')
+                f.write(bin.nvl(item.description, '')+'\n')
         f.close()
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
         object_id=self.canvas.find_closest(x, y, start=start)[0]
+        debug('_get_closest_object_id_from_xy_with_tag: {}'.format(object_id))
         if tag in self.canvas.gettags(object_id):
             return object_id
 
@@ -767,7 +944,7 @@ class Timeline():
         return r
 
     def _get_item_key_from_object_id(self, object_id):
-        debug('Timeline._get_item_key_from_object_id')
+        debug2('Timeline._get_item_key_from_object_id')
         return self._map_object_id_to_item_key[object_id]
 
     def _get_time_from_xy(self, x, y):
@@ -779,7 +956,7 @@ class Timeline():
             return None
 
     def _get_timeline_from_xy(self, x, y):
-        debug('Timeline._get_timeline_from_item: x={0} y={1}'.format(x, y))
+        debug2('Timeline._get_timeline_from_item: x={0} y={1}'.format(x, y))
         for t in self.timelines:
             if x > self.x and x < t['right'] and y > t['y'] and y < t['bottom']:
                 return t
@@ -821,42 +998,83 @@ class Timeline():
                 self.item_label_display_int=0
             # ToDo: To speed performance up here I cold just draw the hourly items.
             self.draw_items()
-        
-    def _item_mouse_down(self, event):
-        debug2('_item_mouse_down: x={0} y={1}'.format(event.x, event.y))
-        # event.x and event.y are the based on the item of the cursor. not the object being clicked.
-        object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
-        if self.keyboard.escape_key_down:
-            self.delete_item_by_key(self._get_item_key_from_object_id(object_id))
 
-        if 'drags' in self.canvas.gettags(object_id):
-            key=self._get_item_key_from_object_id(object_id)
-            self._dragging['item']=self.items.get_by_key(key)
+    def _item_unselect_all(self):
+        for item in self.items.all_items():
+            if item.selected:
+                item.selected=None
+
+    def _get_item_from_object(self, object_id):
+        key=self._get_item_key_from_object_id(object_id)
+        item=self.items.get_by_key(key)
+        return item
+    
+    def _get_item_from_xy(self, x, y):
+        object_id=self._get_closest_object_id_from_xy_with_tag(x, y, 'item')
+        return self._get_item_from_object(object_id)
+
+    def _get_xy(self, x, y, use_object_coords=False):
+        item=None
+        timeline=None
+        time=None
+        object_id=self._get_closest_object_id_from_xy_with_tag(x, y, 'item')
+        if object_id:
+            item=self._get_item_from_object(object_id)
+            if use_object_coords:
+                x,y=self.canvas.coords(object_id)[0:2]
+        timeline=self._get_timeline_from_xy(x, y)
+        time=self._get_time_from_xy(x, y)
+        debug('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
+        return (object_id, item, timeline, time)
+
+    def _item_mouse_down(self, event):
+        debug('Timeline._item_mouse_down')
+
+        # Will not need to re-draw on mouse down since this is always triggered by mouse up.
+
+        # Multi-select action will be handled by mouse up event.
+        if self.keyboard.control_key_down:
+            return
+
+        object_id,item,timeline,time=self._get_xy(event.x, event.y)
+
+        if not item:
+            return
+        
+        # Escape key indicates a delete of one or more selected items.
+        if self.keyboard.escape_key_down:
+            item.selected=True
+            for item in self.items.all_selected_items():
+                item.deleted=True
+        elif item.drags:
+            item.selected=True
+            self.add_tag_to_object(object_id, 'selected')
+            # Get initial coords for all selected items in the event we need to abort the drag.
+            self._dragging['all_coords']={}
+            self._dragging['item']=item
             self._dragging['object_id']=object_id
             self.canvas.tag_raise(object_id)
-            # Store the original position in case we need to abort the drag and drop.
             self._dragging['coords']=self.canvas.coords(object_id)
             self._dragging['x']=self._dragging['x0']=event.x
             self._dragging['y']=self._dragging['y0']=event.y
+             # Store the original position of all selected items in case we need to abort the drag and drop.
+            for object_id in self.canvas.gettags('selected'):
+                self._dragging['all_coords']['object_id']=self.canvas.coords(object_id)
 
     def _item_mouse_over(self, event):
         debug2('Timeline._item_mouse_over')
+        
         self.mouse=(event.x, event.y)
+
         if not self._is_item_being_dragged():
-            object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
+            object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
             if object_id:
-                coords=self.canvas.coords(object_id)
-                time=self._get_time_from_xy(coords[0], coords[1])
-                timeline=self._get_timeline_from_xy(event.x, event.y)
-                key=self._get_item_key_from_object_id(object_id)
-                item=self.items.get_by_key(key)
                 text=None
-                if time and key:
+                if time and item:
                     if item.has_tags():
                         text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
                     else:
                         text='{0}@{1} <{2}>'.format('', item.title, item.status)
-                        
                     self._display_time_with_text(time, text)
                 else:
                     debug('No coord time!')
@@ -864,9 +1082,12 @@ class Timeline():
                 debug('No object id!')
 
     def _item_mouse_drag(self, event):
-        debug2('_item_mouse_drag')
+        debug('Timeline._item_mouse_drag')
+
         self.mouse=(event.x, event.y)
+
         if 'object_id' in self._dragging:
+            debug('Dragging')
             object_id=self._dragging['object_id']
             coords=self.canvas.coords(object_id)
             self._display_time_with_text(self._get_time_from_xy(coords[0], coords[1]))
@@ -874,59 +1095,94 @@ class Timeline():
             delta_y = event.y - self._dragging["y"]
             self._dragging["x"] = event.x
             self._dragging["y"] = event.y
-            self.canvas.move(object_id, delta_x, delta_y)
+            self.canvas.move('selected', delta_x, delta_y)
 
     def _item_mouse_drag_abort(self, x, y):
-        debug2('_item_mouse_drag_abort')
-        x,y,right,bottom=self._dragging['coords']
-        self.canvas.coords(self._dragging['object_id'], x, y, right, bottom)
+        debug('Timeline._item_mouse_drag_abort')
+        for k, v in self._dragging['all_coords'].items():
+             debug('v={}'.format(v))
+             x,y,right,bottom=v
+             self.canvas.coords(k, x, y, right, bottom)
 
     def _item_mouse_up(self, event):
-        debug2('_item_mouse_up')
+        debug('Timeline._item_mouse_up')
+
         self.mouse=(event.x, event.y)
 
-        if 'object_id' not in self._dragging:
-            return
-        else:
-            object_id=self._dragging['object_id']
+        # Multi-select action
+        if self.keyboard.control_key_down:
 
-        delta_x = event.x - self._dragging["x0"]
-        delta_y = event.y - self._dragging["y0"]
+            object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
+            
+            if self._timeline_for_selected_item is None:
+                item.selected=not item.selected
+            elif self._timeline_for_selected_item!=timeline['name']:
+                self._item_unselect_all()
+                item.selected=True
+            else:
+                item.selected=not item.selected
 
-        if delta_x != 0 or delta_y != 0:
-            x,y=self.canvas.coords(object_id)[0:2]
-            item=self._dragging['item']
-            timeline=self._get_timeline_from_xy(x,y)
-            if timeline:
-                item.datetime=self._get_time_from_xy(x,y)
-                item.x=x
-                item.y_as_pct_of_height=(y-timeline['y'])/timeline['height']
-                del self._map_object_id_to_item_key[object_id]
-                self.canvas.delete(item.key)
-                self.draw_item(item)
-                item.save()
-                if self.cbfunc and item.type != 'image':
-                    self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
+            self._timeline_for_selected_item=timeline['name']
+
+        # End of drag operation.
+        elif 'object_id' in self._dragging:
+
+            delta_x = event.x - self._dragging["x0"]
+            delta_y = event.y - self._dragging["y0"]
+
+            abort_drag=False
+            first_timeline=None
+            for object_id in self.canvas.find_withtag('selected'):
+                x,y=self.canvas.coords(object_id)[0:2]
+                timeline=self._get_timeline_from_xy(x,y)
+                if not timeline:
+                    abort_drag=True
+                elif first_timeline is None:
+                    first_timeline=timeline['name']
+                elif first_timeline != timeline['name']:
+                    abort_drag=True
+
+            if not abort_drag:
+                for object_id in self.canvas.find_withtag('selected'):
+                    x,y=self.canvas.coords(object_id)[0:2]
+                    key=self._get_item_key_from_object_id(object_id)
+                    item=self.items.get_by_key(key)
+                    item.selected=False
+                    timeline=self._get_timeline_from_xy(x,y)
+                    item.datetime=self._get_time_from_xy(x,y)
+                    item.x=x
+                    item.y_as_pct_of_height=(y-timeline['y'])/timeline['height']
+                    del self._map_object_id_to_item_key[object_id]
+                    self.draw_item(item)
+                    item.save()
+                    if self.cbfunc and item.type != 'image':
+                        self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
+                    self._item_unselect_all()
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
                 if self.cbfunc:
-                     # Add the x and y drop locations.
+                    # Add the x and y drop locations.
                     self.cbfunc({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
 
-        self._dragging={}
-        self.statusbox.clear()
+            self._dragging={}
+            self.statusbox.clear()
 
+        self.draw_items()
+        
     def _item_mouse_doubleclick(self, event):
         debug2('Timeline._item_mouse_doubleclick')
         object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
         key=self._get_item_key_from_object_id(object_id)
         item=self.items.get_by_key(key)
         self.root.config(cursor='wait')
-        f=ItemForm(root=self.root, theme=self.theme, item=item)
+        self.root.update_idletasks()
+        f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
         self.root.configure(cursor='')
         self.root.update_idletasks()
         #self.open_form_for_item(key)
         #self.canvas.focus_force()
+
+
 
     def test(self, event):
         debug('Timeline.test')
@@ -955,9 +1211,11 @@ class Timeline():
         None
 
     def remove_item(self, key):
+        # Not used
         debug('Timeline.remove_item')
-        self.items.delete(key=key, save=True)
-        self.draw_items()
+        item=self.items.get_by_key(key)
+        item.deleted=True
+        self.draw_item(item)
 
     def _set_status_text_for_item(self):
         debug('Timeline._set_status_text_for_item')
@@ -1115,6 +1373,15 @@ class Timeline():
             x=self._get_x_from_time(self.timeline_time, t['begin_time'], t['total_days'], self.width)
             self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='red', tags="timeline_detail")
 
+            self._draw_current_time()
+
+    def _draw_current_time(self):
+        self.canvas.delete("timeline_current_time")
+        for t in self.timelines:
             # Draw blue line at current time.
             x=self._get_x_from_time(datetime.datetime.now(), t['begin_time'], t['total_days'], self.width)
-            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='blue', tags="timeline_detail")
+            self.canvas.create_line(x, t['y'], x, t['y']+t['height'], fill='blue', tags="timeline_current_time")
+
+    def update_background_tasks(self):
+        debug('Timeline.update_background_tasks')
+        self._draw_current_time()

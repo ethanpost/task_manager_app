@@ -32,7 +32,12 @@ class App(tk.Tk):
 
     def cbfunc(self, dict):
         debug('cbfunc: {}'.format(dict))
-        
+
+    def update_background_tasks(self):
+        debug('App.update_background_tasks')
+        self.timeline.update_background_tasks()
+        self.after(6000, self.update_background_tasks)
 if __name__ == "__main__":
     app = App()
+    #app.after(60000, app.update_background_tasks)
     app.mainloop()
