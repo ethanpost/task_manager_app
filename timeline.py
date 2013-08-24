@@ -377,7 +377,7 @@ class Item():
         self.shape='rectangle'
         self.type=None
         self.datetime=None
-        self.tags=[]
+        self._tags=[]
         self._status=None
         self.directory=None
         self.object_id=None
@@ -396,6 +396,16 @@ class Item():
         """
         self.selected=False
 
+    @property
+    def tags (self):
+        return self._tags
+
+    @tags.setter
+    def tags (self, tags_list):
+        tags_list=bin.remove_duplicates_from_list(tags_list)
+        tags_list=[x.lower() for x in tags_list]
+        self._tags=tags_list
+        
     @property
     def text (self):
         return self._text
@@ -438,25 +448,16 @@ class Item():
         None
 
     def has_tags(self):
-        if len(self.tags) > 0:
+        if len(self._tags) > 0:
             return True
         else:
             return False
 
     def get_primary_tag(self):
         if self.has_tags():
-            return self.tags[0]
+            return self._tags[0]
         else:
             return None
-
-    def add_tags(self, tags=None):
-        """
-        Append a single tag or extend the tag list with multiple tags if you pass in a list of tags.
-        """
-        if type(tags)==list:
-            self.tags.extend(tags)
-        else:
-            self.tags.append(tags)
 
     def _parse_input_text(self, text):
         """
@@ -471,13 +472,11 @@ class Item():
         # Values before the first '@' are tags and should be in a comma separated list
         # Some tags are special, like colors, only the first color will apply.
 
-        self.tags=[]
+        at_tag=None
         if text.find('@') > 0:
-            at_tag=False
             tag=text.split('@')[0].strip()
             if ' ' not in tag:
-                at_tag=True
-                self.add_tags(tag)
+                at_tag=tag
                 text=text.split('@')[1]
 
         debug('! tags={0} text={1}'.format(self.tags, text))
@@ -493,20 +492,23 @@ class Item():
         debug('! status={0} text={1}'.format(self.status, text))
 
         # Everything in last set of brackets are tags.
+        are_tags=[]
         if text.rfind('['):
             b=text.rfind('[')
             e=text.rfind(']')
             if b < e:
-                are_tags=True
-                tags=text[b+1:e].split(',')
-                tags=[tag.strip() for tag in tags]
-                for tag in tags:
-                    if ' ' in tag:
+                are_tags=text[b+1:e].split(',')
+                are_tags=[t.strip() for t in are_tags]
+                for t in are_tags:
+                    if ' ' in t:
                         # Tags with blanks are not valid. These are probably not tags.
-                        are_tags=False
-                if are_tags:
-                    self.add_tags(tags)
+                        are_tags=[]
+                if len(are_tags) > 0:
                     text=text[0:b]+text[e+1:]
+
+        if at_tag:
+            are_tags.append(at_tag)
+        self.tags=are_tags
 
         debug('! tags={0} text={1}'.format(self.tags, text))
 
@@ -580,6 +582,8 @@ class Items():
                 item.color='white'
             if not hasattr(item, 'drags'):
                 item.drags=True
+            if not hasattr(item, '_tags'):
+                item._tags=[]
         item.selected=None
 
     def all_items(self):

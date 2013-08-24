@@ -36,8 +36,9 @@ class App(tk.Tk):
     def update_background_tasks(self):
         debug('App.update_background_tasks')
         self.timeline.update_background_tasks()
-        self.after(6000, self.update_background_tasks)
+        self.after(10000, self.update_background_tasks)
+
 if __name__ == "__main__":
     app = App()
-    #app.after(60000, app.update_background_tasks)
+    app.after(10000, app.update_background_tasks)
     app.mainloop()

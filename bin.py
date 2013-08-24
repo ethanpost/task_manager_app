@@ -13,6 +13,12 @@ import datetime
 import subprocess
 from PIL import ImageTk, Image, ImageOps
 
+def remove_duplicates_from_list(seq):
+    # http://www.peterbe.com/plog/uniqifiers-benchmark
+    # Order preserving
+    seen = set()
+    return [x for x in seq if x not in seen and not seen.add(x)]
+   
 def find(root, type=None, name='.*'):
     """
     Works like unix find command (this is a generator).
