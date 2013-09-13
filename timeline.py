@@ -95,6 +95,20 @@ NEW_COLORS=['snow', 'ghost white', 'white smoke', 'gainsboro', 'floral white', '
     'gray84', 'gray85', 'gray86', 'gray87', 'gray88', 'gray89', 'gray90', 'gray91', 'gray92',
     'gray93', 'gray94', 'gray95', 'gray97', 'gray98', 'gray99']
 
+def get_item_type_from_text(text):
+    """
+    Return the item type by parsing the input string.
+    """
+    if text[0:5] in ("http:", "https"):
+        return 'link'
+
+    if text.find('@') >= 0:
+        tag=text.split('@')[0].strip()
+        if ' ' not in tag:
+            return 'task'
+
+    return 'remark'
+
 class ItemForm():
 
     CLOSE_FORM=23750
@@ -112,6 +126,7 @@ class ItemForm():
         self.item=item
         self.copy_of_item=copy.deepcopy(item)
         self.title_var=tk.StringVar()
+        bin.touch(item.status_log_file_path)
         self._draw()
 
     def _update_status_history(self):
@@ -212,7 +227,7 @@ class ItemForm():
 
         self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
         self.filebar.patterns_to_exclude=['_data_']
-        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.directory), drags=False)
+        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
         self.filebar.draw()
 
     def _draw_description(self):
@@ -352,49 +367,82 @@ class ItemForm():
             debug('update_tags')
             self.item.tags=self.tags_var.get().split(',')
 
-class Item():
+class BaseItem():
 
     COLORS=['white', 'grey', 'black', 'green', 'blue', 'yellow', 'red']
-    XCOLORS=['red', 'orange', 'yellow', 'aquamarine2', 'lime green', 'lawn green', 'light sea green',
-            'green yellow', 'light sky blue', 'white', 'SlateBlue1']
-    
-    def __init__(self, root_path, *args, **kwargs):
+
+    def __init__(self, root_path, text, x, y, dt, image_path=None):
+        # Root folder for other files and folders.
         self.root_path=root_path
         # Unique 20 character key generated automatically.
         self.key=None
-        # Used to store text property (getter/setter), this is parsed into tags, title and status.
-        self._text=None
-        # Title of task, does not need to be unique.
+        # Title of item, does not need to be unique.
         self.title=None
         # Used to store x/y position within the app at various points.
         self.x=None
         self.y=None
         # Used to position the item on the hourly, daily and monthly timeline.
         self.y_as_pct_of_height=None
-        self.image_path=None
-        self.state=None
-        self.size=None
+        # Shape to display on the timeline.
         self.shape='rectangle'
+        # Path to image to display instead of a shape.
+        self.image_path=image_path
+        #self.state=None
+        # Size of image or shape.
+        self.size=8
         self.type=None
-        self.datetime=None
-        self._tags=[]
-        self._status=None
-        self.directory=None
+        self.datetime=dt
         self.object_id=None
-        self.description=None
-        self._deleted=False
         self.private=True
         self.version=0
-        self.status_log_file_path=None
-        self.color='white'
+        self.color='blue'
         self.selected=False
         self.drags=True
+        self.folder_path=None
+        self.description=None
+        self._text=text
+        self._tags=[]
+        self._deleted=False
+        self.key=bin.random_string(20)
+        self.x=x
+        self.y=y
 
+        # None marks a new item when drawing.
+        self.state=None
+
+        self.label_int=0
+
+        self._parse_text(text)
+
+        # At a minimum title must be set, if not we just assign text to it, but this should already be done.
+        if not self.title:
+            self.title=text
+
+        self.folder_path=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
+        bin.mkdir(self.folder_path)
+
+    def get_label(self, int=None):
+        if int is None:
+            int=self.label_int
+        if int==0:
+            return ''
+        else:
+            return self.text
+    
     def init(self):
         """
         Some housekeeping when we initially load the item from the .dat file.
         """
         self.selected=False
+
+    @property
+    def text (self):
+        return self._text
+        
+    @text.setter
+    def text (self, text):
+        self._text=text
+        self._parse_text(text)
 
     @property
     def tags (self):
@@ -405,7 +453,205 @@ class Item():
         tags_list=bin.remove_duplicates_from_list(tags_list)
         tags_list=[x.lower() for x in tags_list]
         self._tags=tags_list
+
+    def get_primary_tag(self):
+        if self.has_tags():
+            return self._tags[0]
+        else:
+            return None
+
+    def has_tags(self):
+        if len(self._tags) > 0:
+            return True
+        else:
+            return False
         
+    @property
+    def deleted (self):
+        return self._deleted
+
+    @deleted.setter
+    def deleted (self, deleted_true_false):
+        if deleted_true_false==True:
+            self._deleted=True
+            # Save must occur before the move or it recreates the original directory defined by folder_path.
+            self.save()
+            debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
+            bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
+        else:
+            self._deleted=False
+
+    def move(self, root_path):
+        None
+
+    def save(self):
+        debug('BaseItem.save')
+        data_path=os.path.join(self.folder_path.strip(), '_data_')
+        bin.mkdir(data_path)
+        bin.save_database2(os.path.join(data_path, self.key), object=self)
+
+    def _parse_text(self, text):
+        None
+
+class Link(BaseItem):
+
+    COLORS=['light sky blue']
+    
+    def __init__(self, root_path, text, x, y, dt, image_path=None):
+        super().__init__(root_path, text, x, y, dt, image_path)
+        self.color='light sky blue'
+        self.type='link'
+        self.size=8
+        self._parse_text(self.text)
+
+    def _parse_text(self, text):
+        """
+        Links are created in this fashion.
+
+        http://google.com <Google> [tag,tag]
+        """
+
+        debug('Link._parse_text: text={}'.format(text))
+        # Grab http link
+        if text.find('http') > 0:
+            link=text.split(' ')[0].strip()
+            text=text.split(' ', 1)[1]
+            self.title=link
+
+        # Alternative text is in last set of angle brackets if it exist.
+        if text.rfind('<') > 0:
+            b=text.rfind('<')
+            e=text.rfind('>')
+            if b < e:
+                self.title=text[b+1:e]
+                text=text[0:b]+text[e+1:]
+
+        # Everything in last set of brackets are tags.
+        are_tags=[]
+        if text.rfind('['):
+            b=text.rfind('[')
+            e=text.rfind(']')
+            if b < e:
+                are_tags=text[b+1:e].split(',')
+                are_tags=[t.strip() for t in are_tags]
+                for t in are_tags:
+                    if ' ' in t:
+                        # Tags with blanks are not valid. These are probably not tags.
+                        are_tags=[]
+
+        self.tags=are_tags
+
+    def get_label(self, int=None):
+        if int is None:
+            int=self.label_int
+
+        if int==0:
+            return None
+        elif int == 1 and self.title:
+            return self.title
+        elif int==1 and not self.title:
+            return self.text
+        elif int == 2 and self.has_tags():
+            return '{0}@{1}'.format(self.get_primary_tag(), self.title)
+        elif int == 2 and not self.has_tags():
+            return '{0}'.format(self.title)
+        else:
+            return self.title
+        
+class Remark(BaseItem):
+
+    COLORS=['yellow']
+
+    def __init__(self, root_path, text, x, y, dt, image_path=None):
+        super().__init__(root_path, text, x, y, dt, image_path)
+        self.color='yellow'
+        self.type='remark'
+        self._text=text
+        self.size=8
+        self._parse_text(self._text)
+
+    def _parse_text(self, text):
+        """
+        Remarks are created in this fashion.
+        
+        >Remark [tag,tag]
+        """
+        debug('Remark._parse_text: {}'.format(text))
+        if self._text.rfind('>')==0:
+            self._text=self._text.split('>')[1]
+
+        are_tags=[]
+        if self._text.rfind('['):
+            b=self._text.rfind('[')
+            e=self._text.rfind(']')
+            if b < e:
+                are_tags=self._text[b+1:e].split(',')
+                are_tags=[t.strip() for t in are_tags]
+                for t in are_tags:
+                    if ' ' in t:
+                        # Tags with blanks are not valid. These are probably not tags.
+                        are_tags=[]
+                
+        self.tags=are_tags
+        if len(are_tags) > 0:
+            self.title=self._text[0:b]+self._text[e+1:]
+        else:
+            self.title=self._text
+
+    def get_label(self, int=None):
+        if int is None:
+            int=self.label_int
+
+        if int==0:
+            return None
+        elif int == 1:
+            return self.title
+        elif int == 2 and self.has_tags():
+            return '{0}@{1}'.format(self.get_primary_tag(), self.title)
+        elif int == 2 and not self.has_tags():
+            return self.title
+        else:
+            return self.title
+
+class Task(BaseItem):
+
+    COLORS=['green', 'blue', 'red']
+
+    def __init__(self, root_path, text, x, y, dt, image_path=None):
+        super().__init__(root_path, text, x, y, dt, image_path)
+        self._status=None
+        self.type='task'
+        self.size=8
+        self.status_log_file_path=os.path.join(self.folder_path, 'status.txt')
+        self.drags=True
+        self._parse_text(text)
+        self.color='green'
+
+    def init(self):
+        """
+        Some housekeeping when we initially load the item from the .dat file.
+        """
+        self.selected=False
+
+    def get_label(self, int=None):
+        debug('Task.get_label: int={}'.format(int))
+        if int is None:
+            int=self.label_int
+
+        if int==0:
+            return None
+        elif int == 1:
+            return self.title
+        elif int == 2:
+            if self.has_tags():
+                return '{0}@{1}'.format(self.get_primary_tag(), self.title)
+            else:
+                return '{0}'.format(self.title)
+        elif int == 32 and self.status:
+            return '<{0}>'.format(self.status.rstrip())
+        else:
+            return self.text
+            
     @property
     def text (self):
         return self._text
@@ -413,7 +659,7 @@ class Item():
     @text.setter
     def text (self, text):
         self._text=text
-        self._parse_input_text(text)
+        self._parse_text(text)
 
     @property
     def status (self):
@@ -423,43 +669,15 @@ class Item():
     def status(self, text):
         # Status history is stored in a list, with most recent status first, we also add a timestamp.
         # self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n')
+        self._status=text
+        # If label display is using status, we need to force it to update.
+        self.label_int=self.label_int
         text=bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n'
         log=bin.reverse_logger(self.status_log_file_path)
         log.write(text)
         log.close()
-        self._status=text
-
-    @property
-    def deleted (self):
-        return self._deleted
-
-    @deleted.setter
-    def deleted (self, deleted_true_false):
-        if deleted_true_false==True:
-            self._deleted=True
-            # Save must occur before the move or it recreates the original directory.
-            self.save()
-            debug('*** Moving {} to _deleted_'.format(self.directory))
-            bin.mv(self.directory, os.path.join(self.directory, '..', '_deleted_'))
-        else:
-            self._deleted=False
-
-    def move(self, root_path):
-        None
-
-    def has_tags(self):
-        if len(self._tags) > 0:
-            return True
-        else:
-            return False
-
-    def get_primary_tag(self):
-        if self.has_tags():
-            return self._tags[0]
-        else:
-            return None
-
-    def _parse_input_text(self, text):
+        
+    def _parse_text(self, text):
         """
         Take the input text and parse out tags, title and current status.
 
@@ -467,7 +685,7 @@ class Item():
         tag@Title <status> [tag,tag]
 
         """
-        debug('Item._parse_input_text: {}'.format(text))
+        debug('Task._parse_input_text: {}'.format(text))
 
         # Values before the first '@' are tags and should be in a comma separated list
         # Some tags are special, like colors, only the first color will apply.
@@ -488,8 +706,6 @@ class Item():
             if b < e:
                 self._status=text[b+1:e]
                 text=text[0:b]+text[e+1:]
-
-        debug('! status={0} text={1}'.format(self.status, text))
 
         # Everything in last set of brackets are tags.
         are_tags=[]
@@ -513,42 +729,6 @@ class Item():
         debug('! tags={0} text={1}'.format(self.tags, text))
 
         self.title=text
-
-    def save(self):
-        debug('Item.save')
-        data_path=os.path.join(self.directory.strip(), '_data_')
-        bin.mkdir(data_path)
-        bin.save_database2(os.path.join(data_path, self.key), object=self)
-    
-class NewItem(Item):
-    def __init__(self, root_path, text, x, y, dt):
-        super().__init__(root_path, text, x, y, dt)
-        # ToDo: Need to blow right up here if text is not set and x and y need to be > 0.
-        debug('NewItem! {}'.format(dt))
-
-        self.key=bin.random_string(20)
-        self.x=x
-        self.y=y
-        # None marks a new item when drawing.
-        self.state=None
-        self.datetime=dt
-        
-        # This action will end up setting the title, tags and status.
-        self.text=text
-
-        # At a minimum title must be set, if not we just assign text to it, but this should already be done.
-        if not self.title:
-            self.title=text
-
-        self.directory=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
-    
-        bin.mkdir(self.directory)
-
-        self.status_log_file_path=os.path.join(self.directory, 'status.txt')
-        if self._status:
-            self.status=self._status
-        else:
-            self.status='Created'
 
 class Items():
     def __init__(self, root_dir):
@@ -578,13 +758,7 @@ class Items():
 
     def patch(self):
         for item in self.all_items():
-            if item.color is None:
-                item.color='white'
-            if not hasattr(item, 'drags'):
-                item.drags=True
-            if not hasattr(item, '_tags'):
-                item._tags=[]
-        item.selected=None
+            None
 
     def all_items(self):
         return self.items.values()
@@ -625,7 +799,7 @@ class Timeline():
         self.canvas=kwargs['canvas']
         self.theme=theme.Theme()
 
-        self.item_label_display_int=0
+        self.item_label_int=0
 
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -710,11 +884,6 @@ class Timeline():
         }
         self.monthly['label_format']='%B %y'
 
-        self.timelines=(self.hourly, self.daily, self.monthly)
-
-        self.timeline_time=datetime.datetime.now()
-        self._timelines_draw()
-
         if 'statusbox' in kwargs.keys():
             self.statusbox=kwargs['statusbox']
         else:
@@ -724,23 +893,29 @@ class Timeline():
             theme=self.theme,
             font_size='<',
             x=4,
-            y=self.monthly['bottom']+4,
+            y=self.monthly['y']+self.monthly['height']+4,
             height=16,
             width=self.width)
+            
+        self.timelines=(self.hourly, self.daily, self.monthly)
+
+        self.timeline_time=datetime.datetime.now()
+        self._timelines_draw()
+
 
         # Reference to application root_path.
         self.root_path=bin.application_root_path()
         
         # Where item objects are stored.
-        self.default_item_path=os.path.join(self.root_path, 'items')
-        bin.mkdir(self.default_item_path)
+        self.root_path_for_items=os.path.join(self.root_path, 'items')
+        bin.mkdir(self.root_path_for_items)
 
         # Where deleted item are stored.
         self.default_deleted_items_path=os.path.join(self.root_path, 'items', '_deleted_')
         bin.mkdir(self.default_deleted_items_path)
 
         # This is a dict of all of the items in the database, indexed by key.
-        self.items=Items(root_dir=self.default_item_path)
+        self.items=Items(root_dir=self.root_path_for_items)
 
         self.patch()
 
@@ -759,6 +934,12 @@ class Timeline():
         tags=self.canvas.gettags(object_id)
         if tag not in tags:
             self.canvas.addtag_withtag(tag, object_id)
+
+    def _add_item_to_timeline(self, item):
+        self.items.items[item.key]=item
+        item.save()
+        if self.cbfunc:
+            self.cbfunc({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items.get_by_key(item.key)})
 
     def _adjust_timeline_total_days(self, timeline, more_days=None, less_days=None):
         if more_days:
@@ -784,15 +965,17 @@ class Timeline():
         
         debug('Timeline._timeline_mouse_wheel')
 
-        object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
+        object_id,item,timeline,time=self._get_xy(event.x, event.y)
+        #object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
         if object_id:
-            key=self._get_item_key_from_object_id(object_id)
-            item=self.items.get_by_key(key)
-            debug('keycode={0} index={1} len={2}'.format(event.keycode, item.COLORS.index(item.color), len(item.COLORS)))
+            #key=self._get_item_key_from_object_id(object_id)
+            #item=self.items.get_by_key(key)
+            #debug('keycode={0} index={1} len={2}'.format(event.keycode, item.COLORS.index(item.color), len(item.COLORS)))
             if event.keycode==120:
                 index=item.COLORS.index(item.color)
                 if index==0:
                     index=len(item.COLORS)-1
+
                 else:
                     index-=1
             else:
@@ -805,9 +988,18 @@ class Timeline():
             self.draw_item(item)
             # self.statusbox.text=item.color
             # debug('color: {}'.format(item.color))
-        else:
-            timeline=self._get_timeline_from_xy(event.x, event.y)
-            if timeline:
+        elif timeline:
+            self.statusbox.clear()
+            if self.keyboard.shift_key_down:
+                if event.keycode==120:
+                    timeline['height']+=5
+                    self._timelines_draw()
+                    self.draw_items()
+                elif event.keycode==-120:
+                    timeline['height']-=5
+                    self._timelines_draw()
+                    self.draw_items()
+            else:
                 if event.keycode==120:
                     self._adjust_timeline_total_days(timeline, more_days=True)
                 elif event.keycode==-120:
@@ -886,14 +1078,14 @@ class Timeline():
                     item_borderwidth=1
                     item_outline='black'
                     item_dash=None
-                if item.shape=='rectangle':
+                if item.shape=='rectangle' and not item.image_path:
                     item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill=item.color, outline=item_outline, tags=item_tags, stipple=None,
                                                                 width=item_borderwidth, dash=item_dash)
                 elif item.image_path:
                     thumb_key='{0}_{1}'.format(item.key, timeline['name'])
                     # ToDo: Iterator here?
                     if thumb_key not in self.thumbnails.keys():
-                        thumbnail=bin.get_photoimage_thumbnail(item.file_path, border_color='black', border_size=1, size=size)
+                        thumbnail=bin.get_photoimage_thumbnail(item.image_path, border_color='black', border_size=1, size=size+10)
                         self.thumbnails[thumb_key]=thumbnail
                     item.object_id=self.canvas.create_image(x, y, anchor=tk.NW, image=self.thumbnails[thumb_key], state=tk.NORMAL, tags=item_tags)
                         
@@ -903,24 +1095,8 @@ class Timeline():
                 # Draw labels for hourly timeline.
                 # ToDo: This is going to break for images.
                 if timeline['name']=="hourly":
-                    
-                    if   self.item_label_display_int==0:
-                        display_text=''
-                    elif self.item_label_display_int==1:
-                        display_text=item.title
-                    elif self.item_label_display_int==2:
-                        if item.has_tags():
-                            display_text='{0}@{1}'.format(item.get_primary_tag(), item.title)
-                        else:
-                            display_text='{0}'.format(item.title)
-                    elif self.item_label_display_int==3:
-                        if item.has_tags():
-                            display_text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
-                        else:
-                            display_text='{0} <{1}>'.format(item.title, item.status)
-
                     x,y,right,bottom=self.canvas.coords(item.object_id)
-                    object_id=self.canvas.create_text(right+5, y-2, text=display_text, font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
+                    object_id=self.canvas.create_text(right+5, y-2, text=item.get_label(self.item_label_int), font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
 
     def dump(self, file_name):
         f=open(file_name, mode='w')
@@ -993,15 +1169,12 @@ class Timeline():
             self.draw_items()
         elif dict['state']==8 and dict['keycode']==112:
             # F1 Key
-            # 0 Nothing displayed next to item.
-            # 1 Title
-            # 2 tag@title
-            # 3 tag@title <status>
-            self.item_label_display_int+=1
-            if self.item_label_display_int > 3:
-                self.item_label_display_int=0
+            self.item_label_int+=1
+            if self.item_label_int > 3:
+                self.item_label_int=0
             # ToDo: To speed performance up here I cold just draw the hourly items.
             self.draw_items()
+            self.statusbox.text='Display Mode {}'.format(self.item_label_int)
 
     def _item_unselect_all(self):
         for item in self.items.all_items():
@@ -1075,7 +1248,9 @@ class Timeline():
             if object_id:
                 text=None
                 if time and item:
-                    if item.has_tags():
+                    if item.type in ('link', 'remark'):
+                        text=item.title
+                    elif item.has_tags():
                         text='{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
                     else:
                         text='{0}@{1} <{2}>'.format('', item.title, item.status)
@@ -1174,19 +1349,39 @@ class Timeline():
         self.draw_items()
         
     def _item_mouse_doubleclick(self, event):
-        debug2('Timeline._item_mouse_doubleclick')
-        object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
-        key=self._get_item_key_from_object_id(object_id)
-        item=self.items.get_by_key(key)
+        debug('Timeline._item_mouse_doubleclick')
+        object_id,item,timeline,time=self._get_xy(event.x, event.y)
         self.root.config(cursor='wait')
         self.root.update_idletasks()
-        f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
+        if item.type=='task':
+            f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
+        elif item.type=='remark':
+            self._timeline_disable_window()
+            if item.has_tags():
+                text='{0} [{1}]'.format(item.title.rstrip(), ','.join(item.tags))
+            else:
+                text=item.title
+            f=modalinputbox.ModalInputBox(
+            root=self.root,
+            canvas=self.canvas,
+            text=text)
+            if f.text:
+                item.text=f.text
+                item.save()
+                self.draw_items()
+            self._timeline_enable_window()
+            self.canvas.focus_force()
+        elif item.type=='link':
+            f=modalinputbox.ModalInputBox(
+            root=self.root,
+            canvas=self.canvas,
+            text=item.text)
+            if f.text:
+                item.text=f.text
+                item.save()
+                self.draw_items()
         self.root.configure(cursor='')
         self.root.update_idletasks()
-        #self.open_form_for_item(key)
-        #self.canvas.focus_force()
-
-
 
     def test(self, event):
         debug('Timeline.test')
@@ -1254,6 +1449,10 @@ class Timeline():
         if self.keyboard.shift_key_down:
             self.keyboard.shift_key_down=False
             self._timeline_mouse_click_add_item(event.x, event.y)
+        elif self.keyboard.control_key_down:
+            self.keyboard.control_key_down=False
+            # self._timeline_mouse_click_add_item(event.x, event.y)
+            debug('Control key is down!')
         elif t:
             #self._save_timeline_begin_times()
             self._dragging['timeline']=t
@@ -1265,30 +1464,42 @@ class Timeline():
         else:
             self._dragging={}
 
+    def _timeline_disable_window(self):
+        self.theme.enabled=False
+        self._timelines_draw()
+        self.draw_items()
+
+    def _timeline_enable_window(self):
+        self.theme.enabled=True
+        self._timelines_draw()
+        self.draw_items()
+        self.canvas.focus_force()
+
     def _timeline_mouse_click_add_item(self, x, y):
         timeline=self._get_timeline_from_xy(x, y)
-        if timeline:
-            self.theme.enabled=False
-            self._timelines_draw()
-            self.draw_items()
-            form=modalinputbox.ModalInputBox(
-                root=self.root,
-                canvas=self.canvas,
-                text=''
-            )
-            if form.text:
-                new_item=NewItem(root_path=self.default_item_path, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
-                key=new_item.key
-                self.items.items[key]=new_item
-                new_item.save()
-                # Do not save here, save will occur on the draw since this is a new item.
-                self.draw_item(new_item)
-                if self.cbfunc:
-                    self.cbfunc({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items[key]})
-            self.theme.enabled=True
-            self._timelines_draw()
-            self.draw_items()
-            self.canvas.focus_force()
+
+        if not timeline:
+            return
+
+        self._timeline_disable_window()
+
+        form=modalinputbox.ModalInputBox(
+            root=self.root,
+            canvas=self.canvas,
+            text=''
+        )
+        if form.text:
+            item_type=get_item_type_from_text(form.text)
+            if item_type=='link':
+                new_item=Link(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+            elif item_type=='remark':
+                new_item=Remark(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+            elif item_type=='task':
+                new_item=Task(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+
+            self._add_item_to_timeline(new_item)
+
+        self._timeline_enable_window()
 
     def _timeline_mouse_doubleclick(self, event):
         debug2('_timeline_mouse_doubleclick')
@@ -1333,13 +1544,19 @@ class Timeline():
     def _timelines_draw(self):
         debug2('Timeline._timelines_draw')
         self.canvas.delete("timelines")
+        #debug('h: {}'.format(self.timelines['hourly']['height']))
+        #self.canvas.configure(height=sum(self.hourly['height']+self.daily['height']+self.monthly['height']+self.statusbox['height']))
+        bottom_of_last_timeline=0
         for t in self.timelines:
+            t['y']=bottom_of_last_timeline
             t['right']=self.x+self.width
             t['bottom']=t['y']+t['height']
+            bottom_of_last_timeline=t['bottom']
             t['center_x']=self.x+(self.width/2)
             t['center_y']=t['y']+(t['height']/2)
             object_id=self.canvas.create_rectangle(self.x, t['y'], t['right'], t['bottom'], fill=self.theme.background_color, outline=self.theme.line_color, tags="timelines")
             self.canvas.tag_lower(object_id)
+        self.statusbox.y=bottom_of_last_timeline+4
         self._timelines_draw_details()
 
     def _timelines_draw_details(self):

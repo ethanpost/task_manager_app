@@ -13,6 +13,10 @@ import datetime
 import subprocess
 from PIL import ImageTk, Image, ImageOps
 
+def touch (file_path):
+    if not os.path.isfile(file_path):
+        open(file_path, 'w').close()
+    
 def remove_duplicates_from_list(seq):
     # http://www.peterbe.com/plog/uniqifiers-benchmark
     # Order preserving
@@ -142,7 +146,9 @@ def run_program (program_path=None, file_path=None):
 
 def get_valid_path_name_from_string(string):
     debug('bin.get_valid_folder_name_from_string: string={}'.format(string))
-    return re.sub(r"[\/\\\:\*\?\"\<\>\|]", "", string)
+    string=re.sub(r"[\/\\\:\*\?\"\<\>\|\.]", "", string)
+    # Replace spaces with underscores.
+    return string.strip().replace(' ', '_')
 
 def to_char (t=datetime.datetime.now(), f='%H:%M'):
     """Return a string from a date using the format specified."""

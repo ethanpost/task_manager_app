@@ -30,8 +30,16 @@ class App(tk.Tk):
 
         self.timeline.dump(file_name='C:\\temp\\dump.txt')
 
+        self.bind('<Configure>', self.configure_event)
+
     def cbfunc(self, dict):
         debug('cbfunc: {}'.format(dict))
+
+    def configure_event(self, event):
+        self.timeline.width=event.width
+        self.canvas.configure(height=event.height)
+        self.timeline._timelines_draw()
+        self.timeline.draw_items()
 
     def update_background_tasks(self):
         debug('App.update_background_tasks')

@@ -26,7 +26,6 @@ class ModalInputBox():
             self.font=('Arial', 11)
 
         self.textbox=None
-        self.root.bind('<Configure>', self._reclaim_focus )
         self._open()
 
     def _reclaim_focus(self, event):
@@ -36,6 +35,7 @@ class ModalInputBox():
     def _open(self):
         debug('ModalInputBox.open')
         self.win=tk.Toplevel(self.root, padx=2, pady=2)
+        self.win.bind('<Configure>', self._reclaim_focus )
         width=500
         height=30
         left=int((self.canvas.winfo_rootx()+0+(self.canvas.winfo_reqwidth()/2))-(width/2))
