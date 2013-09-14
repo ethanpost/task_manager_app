@@ -947,14 +947,13 @@ class Timeline():
         else:
             negative_or_positive=-1
             
-        factor={'hourly': 30/1440, 'daily': 8/24, 'monthly': 7}[timeline['name']]
-        timeline['total_days']+=factor*negative_or_positive
-
-        #t=self._get_time_from_xy(timeline['center_x'], timeline['center_y'])
-        #timeline['begin_time']=t-datetime.timedelta(days=timeline['total_days']/2)
-
-        self._timelines_draw_details()
-        self.draw_items()
+        factor={'hourly': 60/1440, 'daily': 1, 'monthly': 30}[timeline['name']]
+        min_days={'hourly': 120/1440, 'daily': 2, 'monthly': 60}[timeline['name']]
+        
+        if timeline['total_days'] > min_days or negative_or_positive > 0:
+            timeline['total_days']+=factor*negative_or_positive
+            self._timelines_draw_details()
+            self.draw_items()
 
     def _timeline_mouse_wheel(self, event):
 
@@ -966,11 +965,8 @@ class Timeline():
         debug('Timeline._timeline_mouse_wheel')
 
         object_id,item,timeline,time=self._get_xy(event.x, event.y)
-        #object_id=self._get_closest_object_id_from_xy_with_tag(event.x, event.y, 'item')
+
         if object_id:
-            #key=self._get_item_key_from_object_id(object_id)
-            #item=self.items.get_by_key(key)
-            #debug('keycode={0} index={1} len={2}'.format(event.keycode, item.COLORS.index(item.color), len(item.COLORS)))
             if event.keycode==120:
                 index=item.COLORS.index(item.color)
                 if index==0:
