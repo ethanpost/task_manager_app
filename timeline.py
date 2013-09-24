@@ -396,13 +396,18 @@ class BaseItem():
         self.private=True
         self.version=0
         self.color='blue'
-        self.selected=False
+        self._selected=False
         self.drags=True
         self.folder_path=None
         self.description=None
         self._text=text
         self._tags=[]
+        # There is a getter/setter for this property. When an item is deleted it is moved to a _deleted_ folder.
+        # Will add a purge process which removes deleted items. Also needs to be some sort of automatic purge
+        # which takes place.
         self._deleted=False
+        self._purged=False
+        self.hidden=False
         self.key=bin.random_string(20)
         self.x=x
         self.y=y
@@ -433,7 +438,7 @@ class BaseItem():
         """
         Some housekeeping when we initially load the item from the .dat file.
         """
-        self.selected=False
+        self._selected=False
 
     @property
     def text (self):
@@ -465,7 +470,34 @@ class BaseItem():
             return True
         else:
             return False
-        
+
+    @property
+    def selected(self):
+        return self._selected
+
+    @selected.setter
+    def selected(self, tf):
+        if tf==True:
+            self._selected=True
+        else:
+            self._selected=False
+
+    @property
+    def purged (self):
+        return self._purged
+
+    @purged.setter
+    def purged (self, purged_true_false):
+        if purged_true_false==True:
+            self._purged=True
+            # Save must occur before the move or it recreates the original directory defined by folder_path.
+            #self.save()
+            #debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
+            #bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
+        else:
+            # Todo: This can never happen
+            self._purged=False
+
     @property
     def deleted (self):
         return self._deleted
@@ -475,10 +507,11 @@ class BaseItem():
         if deleted_true_false==True:
             self._deleted=True
             # Save must occur before the move or it recreates the original directory defined by folder_path.
-            self.save()
-            debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
-            bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
+            #self.save()
+            #debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
+            #bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
         else:
+            # Todo: Need to add un-delete feature.
             self._deleted=False
 
     def move(self, root_path):
@@ -765,7 +798,7 @@ class Items():
 
     def all_selected_items(self):
         for item in self.all_items():
-            if item.selected and not item.deleted:
+            if item.selected:
                 yield item
 
     def get_by_key(self, key):
@@ -860,6 +893,11 @@ class Timeline():
         self.canvas.tag_bind("item", "<Double-1>",        self._item_mouse_doubleclick)
         self.canvas.tag_bind("item", "<Button-3>",        self._show_item_menu)
 
+        self._f2_display_mode=0
+        self.display_items=True
+        self.display_hidden_items=False
+        self.display_deleted_items=False
+
         self.hourly={
             'name': 'hourly',
             'y': self.y,
@@ -928,7 +966,8 @@ class Timeline():
 
         self._build_menus()
 
-        self._timeline_for_selected_item=None
+        self._timeline_of_last_selected_item=None
+        self._total_items_selected=0
 
     def add_tag_to_object(self, object_id, tag):
         tags=self.canvas.gettags(object_id)
@@ -962,7 +1001,7 @@ class Timeline():
         if event.widget.widgetName != 'canvas':
             return
         
-        debug('Timeline._timeline_mouse_wheel')
+        debug2('Timeline._timeline_mouse_wheel')
 
         object_id,item,timeline,time=self._get_xy(event.x, event.y)
 
@@ -1038,11 +1077,8 @@ class Timeline():
             self.draw_item(item, delete_first=False)
 
     def draw_item(self, item, delete_first=True):
-        debug2('Timeline.draw_item')
+        debug('Timeline.draw_item')
 
-        if item.deleted:
-            return
-        
         # If this is a new item.
         if not item.state:
             item.y_as_pct_of_height=self._get_y_as_pct_of_height_from_xy(item.x, item.y)
@@ -1053,6 +1089,20 @@ class Timeline():
 
         if delete_first:
             self.canvas.delete(item.key)
+
+        # Determine if we really need to draw this particular item.
+        tf=False
+        if self.display_deleted_items and item.deleted:
+            tf=True
+        elif self.display_hidden_items and item.hidden:
+            tf=True
+        elif self.display_items and (not item.hidden and not item.deleted and not item.purged):
+            tf=True
+        if item.purged:
+            return
+
+        if not tf:
+            return
 
         label_tags=' '.join(['all_items', item.key])
             
@@ -1065,7 +1115,7 @@ class Timeline():
 
                 x=bin.days_between_two_dates(item.datetime, timeline['begin_time'])/timeline['total_days']*self.width
                 y=timeline['y']+(timeline['height']*item.y_as_pct_of_height)
-                if item.selected and self._timeline_for_selected_item==timeline['name']:
+                if item.selected and (self._timeline_of_last_selected_item==timeline['name'] or self._timeline_of_last_selected_item is None):
                     item_borderwidth=2
                     item_outline='black'
                     item_dash=(1,2)
@@ -1094,6 +1144,13 @@ class Timeline():
                     x,y,right,bottom=self.canvas.coords(item.object_id)
                     object_id=self.canvas.create_text(right+5, y-2, text=item.get_label(self.item_label_int), font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
 
+    def _delete_selected_items(self, redraw=False):
+        for item in self.items.all_selected_items():
+            item.deleted=True
+            if redraw:
+                self.draw_item(item, delete_first=True)
+        self._item_unselect_all(redraw=True)
+            
     def dump(self, file_name):
         f=open(file_name, mode='w')
         for item in self.items.all_items():
@@ -1104,7 +1161,7 @@ class Timeline():
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
         object_id=self.canvas.find_closest(x, y, start=start)[0]
-        debug('_get_closest_object_id_from_xy_with_tag: {}'.format(object_id))
+        debug2('_get_closest_object_id_from_xy_with_tag: {}'.format(object_id))
         if tag in self.canvas.gettags(object_id):
             return object_id
 
@@ -1124,7 +1181,7 @@ class Timeline():
         return self._map_object_id_to_item_key[object_id]
 
     def _get_time_from_xy(self, x, y):
-        debug('Timeline._get_time_from_item')
+        debug2('Timeline._get_time_from_item')
         timeline=self._get_timeline_from_xy(x, y)
         if timeline:
             return timeline['begin_time']+datetime.timedelta(days=x/self.width*timeline['total_days'])
@@ -1142,11 +1199,18 @@ class Timeline():
         y_as_pct_of_height=abs(y-timeline['y'])/timeline['height']
         return y_as_pct_of_height
 
+    def _hide_selected_items(self):
+        for item in self.items.all_selected_items():
+            item.hidden=True
+            item.selected=False
+            self.draw_item(item, delete_first=True)
+        self._item_unselect_all(redraw=True)
+
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
     
     def keypress(self, dict):
-        debug('Timeline.keypress: {}'.format(dict))
+        debug2('Timeline.keypress: {}'.format(dict))
 
         timeline=self._get_timeline_from_xy(x=self.mouse[0], y=self.mouse[1])
 
@@ -1163,19 +1227,77 @@ class Timeline():
             self.timeline_time=self.timeline_time-datetime.timedelta(days=move_days)
             self._timelines_draw_details()
             self.draw_items()
+        elif dict['state']>100 and dict['keycode']==46:
+            if self.keyboard.shift_key_down:
+               self._keypress_shift_delete()
+            else:
+                self._keypress_delete()
+        elif dict['state']==8 and dict['keycode']==27:
+            self._keypress_escape()
         elif dict['state']==8 and dict['keycode']==112:
-            # F1 Key
-            self.item_label_int+=1
-            if self.item_label_int > 3:
-                self.item_label_int=0
-            # ToDo: To speed performance up here I cold just draw the hourly items.
-            self.draw_items()
-            self.statusbox.text='Display Mode {}'.format(self.item_label_int)
+            self._keypress_f1()
+        elif dict['state']==8 and dict['keycode']==113:
+            self._keypress_f2()
 
-    def _item_unselect_all(self):
+    def _keypress_delete(self):
+        debug('Timeline._keypress_delete')
+        # Todo: At the moment you can delete deleted items, delete should in fact purge here.
+        self._delete_selected_items(redraw=True)
+        
+    def _keypress_escape(self):
+        self._item_unselect_all(redraw=True)
+
+    def _keypress_f1(self):
+        self.item_label_int+=1
+        if self.item_label_int > 3:
+            self.item_label_int=0
+        # ToDo: To speed performance up here I cold just draw the hourly items.
+        self.draw_items()
+        self.statusbox.text='Display Mode {}'.format(self.item_label_int)
+        
+    def _keypress_f2(self):
+
+        self._f2_display_mode+=1
+
+        if self._f2_display_mode > 2:
+            self._f2_display_mode=0
+
+        if self._f2_display_mode==0:
+            self.display_items=True
+            self.display_hidden_items=False
+            self.display_deleted_items=False
+            text='Display: Default'
+        elif self._f2_display_mode==1:
+            self.display_items=False
+            self.display_hidden_items=True
+            self.display_deleted_items=False
+            text='Display: Hidden Items'
+        elif self._f2_display_mode==2:
+            self.display_items=False
+            self.display_hidden_items=False
+            self.display_deleted_items=True
+            text='Display: Deleted Items'
+
+        self.statusbox.text=text
+        self.draw_items()
+
+    def _keypress_shift_delete(self):
+        self._purge_selected_items(redraw=False)
+        self._item_unselect_all(redraw=True)
+
+    def _item_unselect_all(self, redraw=False):
+
+        for object_id in self.canvas.gettags('selected'):
+            self.canvas.dtag(object_id, 'selected')
+
         for item in self.items.all_items():
             if item.selected:
                 item.selected=None
+                if redraw:
+                    self.draw_item(item, delete_first=True)
+
+        self._total_items_selected=0
+
 
     def _get_item_from_object(self, object_id):
         key=self._get_item_key_from_object_id(object_id)
@@ -1197,7 +1319,7 @@ class Timeline():
                 x,y=self.canvas.coords(object_id)[0:2]
         timeline=self._get_timeline_from_xy(x, y)
         time=self._get_time_from_xy(x, y)
-        debug('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
+        debug2('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
         return (object_id, item, timeline, time)
 
     def _item_mouse_down(self, event):
@@ -1205,21 +1327,51 @@ class Timeline():
 
         # Will not need to re-draw on mouse down since this is always triggered by mouse up.
 
-        # Multi-select action will be handled by mouse up event.
-        if self.keyboard.control_key_down:
-            return
-
         object_id,item,timeline,time=self._get_xy(event.x, event.y)
 
         if not item:
             return
-        
-        # Escape key indicates a delete of one or more selected items.
-        if self.keyboard.escape_key_down:
+
+        if self._total_items_selected > 0 and self._timeline_of_last_selected_item!=timeline['name']:
+            self._item_unselect_all(redraw=False)
+
+        if self._total_items_selected==0:
             item.selected=True
-            for item in self.items.all_selected_items():
-                item.deleted=True
-        elif item.drags:
+            self._total_items_selected=1
+            self.add_tag_to_object(object_id, 'selected')
+        elif self._total_items_selected==1 and not self.keyboard.control_key_down:
+            if item.selected:
+                item.selected=False
+                self._item_unselect_all(redraw=False)
+            else:
+                self._item_unselect_all(redraw=True)
+                item.selected=True
+                self._total_items_selected=1
+                self.add_tag_to_object(object_id, 'selected')
+        elif self._total_items_selected>=1 and self.keyboard.control_key_down:
+            if item.selected:
+                item.selected=False
+                self._total_items_selected-=1
+                self.canvas.dtag(object_id, 'selected')
+            else:
+                item.selected=True
+                self._total_items_selected+=1
+                self.add_tag_to_object(object_id, 'selected')
+        elif self._total_items_selected > 1 and not self.keyboard.control_key_down and not item.selected:
+                self._item_unselect_all(redraw=True)
+                item.selected=True
+                self._total_items_selected=1
+
+        if self._total_items_selected==0:
+            self._timeline_of_last_selected_item=None
+        else:
+            self._timeline_of_last_selected_item=timeline['name']
+
+            # Shift-Delete should purge all selected items.
+            # Space-bar should hide or unhide all selected items.
+            # Space-bar should undelete all selected items.
+            
+        if item.drags and not self.keyboard.control_key_down:
             item.selected=True
             self.add_tag_to_object(object_id, 'selected')
             # Get initial coords for all selected items in the event we need to abort the drag.
@@ -1254,7 +1406,7 @@ class Timeline():
                 else:
                     debug('No coord time!')
             else:
-                debug('No object id!')
+                debug2('No object id!')
 
     def _item_mouse_drag(self, event):
         debug('Timeline._item_mouse_drag')
@@ -1284,27 +1436,19 @@ class Timeline():
 
         self.mouse=(event.x, event.y)
 
-        # Multi-select action
-        if self.keyboard.control_key_down:
+        object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
 
-            object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
-            
-            if self._timeline_for_selected_item is None:
-                item.selected=not item.selected
-            elif self._timeline_for_selected_item!=timeline['name']:
-                self._item_unselect_all()
-                item.selected=True
-            else:
-                item.selected=not item.selected
+        if not item:
+            return
 
-            self._timeline_for_selected_item=timeline['name']
+        delta_x=0
+        delta_y=0
 
-        # End of drag operation.
-        elif 'object_id' in self._dragging:
-
+        if 'object_id' in self._dragging:
             delta_x = event.x - self._dragging["x0"]
             delta_y = event.y - self._dragging["y0"]
 
+        if delta_x!=0 or delta_y!=0:
             abort_drag=False
             first_timeline=None
             for object_id in self.canvas.find_withtag('selected'):
@@ -1332,7 +1476,7 @@ class Timeline():
                     item.save()
                     if self.cbfunc and item.type != 'image':
                         self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
-                    self._item_unselect_all()
+                    self._item_unselect_all(redraw=False)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
                 if self.cbfunc:
@@ -1341,6 +1485,11 @@ class Timeline():
 
             self._dragging={}
             self.statusbox.clear()
+        elif not self.keyboard.control_key_down:
+            self._item_unselect_all(redraw=False)
+            item.selected=True
+            self.add_tag_to_object(object_id, 'selected')
+            self._total_items_selected=1
 
         self.draw_items()
         
@@ -1404,6 +1553,14 @@ class Timeline():
 
     def patch(self):
         None
+
+    def _purge_selected_items(self, redraw=False):
+        debug('Timeline._purge_selected_items')
+        for item in self.items.all_selected_items():
+            item.purged=True
+            debug('purged item!')
+            if redraw:
+                self.draw_item(item, delete_first=True)
 
     def remove_item(self, key):
         # Not used
