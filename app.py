@@ -48,5 +48,5 @@ class App(tk.Tk):
 
 if __name__ == "__main__":
     app = App()
-    app.after(10000, app.update_background_tasks)
+    #app.after(10000, app.update_background_tasks)
     app.mainloop()

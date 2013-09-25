@@ -121,20 +121,18 @@ class ItemForm():
         self.theme=theme
         self.cbfunc=cbfunc
         self._status_doc='<Enter Status or #Milestone>'
-        self._description_doc='<Enter Description>'
+        self._description_doc='<Description/Notes>'
         self.widget_width=75
         self.item=item
         self.copy_of_item=copy.deepcopy(item)
         self.title_var=tk.StringVar()
-        bin.touch(item.status_log_file_path)
         self._draw()
 
     def _update_status_history(self):
         self.history_box.configure(state=tk.NORMAL)
         self.history_box.delete(1.0, tk.END)
-        with open(self.item.status_log_file_path, 'r') as f:
-            for l in f:
-                self.history_box.insert(tk.END, l)
+        for status in self.item.all_statuses():
+            self.history_box.insert(tk.END, status)
         self.history_box.configure(state=tk.DISABLED)
 
     def _close_form(self):
@@ -147,12 +145,6 @@ class ItemForm():
             self.cbfunc({'cbkey': self.CLOSE_FORM})
         self.form.destroy()
 
-    def _disable_description(self):
-        self.description_box.configure(state=tk.DISABLED)
-
-    def _disable_title(self):
-        self.title_box.configure(state=tk.DISABLED)
-
     def _draw(self):
 
         item=self.item
@@ -161,28 +153,29 @@ class ItemForm():
         # Title
         title_frame=tk.Frame(self.form)
         title_frame.pack(fill=tk.X, padx=2, pady=2)
-        self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
-                                width=self.widget_width, disabledforeground='black', textvariable=self.title_var)
+        title_label=tk.Label(title_frame, text='Title', font=self.theme.font(size='>'), anchor="w", relief=tk.FLAT,
+                             fg='black')
+        title_label.pack(fill=tk.X)
+        self.title_box=tk.Entry(title_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT, width=self.widget_width,
+                                textvariable=self.title_var)
         self.title_box.pack(fill=tk.X)
-        self.title_box.bind('<Double-1>', self._enable_title_and_description)
         self.title_box.bind('<Key>', self._keypress_title)
+        self.title_box.bind('<FocusIn>', self.select_all)
         self.title_var.set(item.title)
-        self._disable_title()
 
-        line=tk.Frame(self.form, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
+        line=tk.Frame(self.form, bd=2, relief=tk.RAISED, padx=10, pady=2)
         line.pack(fill=tk.X)
 
         self._draw_description()
-        self._disable_description()
-
-        if not item.description:
-            self._unpack_description()
 
         # Status
         status_frame=tk.Frame(self.form)
-        status_frame.pack(fill=tk.X, padx=2, pady=6)
+        status_frame.pack(fill=tk.X, padx=2, pady=2)
         self.status_var=tk.StringVar()
-        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='<'), relief=tk.FLAT,
+        status_label=tk.Label(status_frame, text='Status', font=self.theme.font(size='>'), anchor="w", relief=tk.FLAT,
+                             fg='black')
+        status_label.pack(fill=tk.X)
+        self.status_box=tk.Entry(status_frame, borderwidth=1, font=self.theme.font(size='>'), relief=tk.FLAT,
                                  width=self.widget_width, textvariable=self.status_var)
         self.status_box.pack(fill=tk.X)
         self.status_box.bind('<Key>', self._keypress_status)
@@ -190,7 +183,6 @@ class ItemForm():
         self.status_var.set(self._status_doc)
         self.status_box.focus_set()
         self._focus_in_status()
-        #self.status_box.select_range(0, tk.END)
 
         line=tk.Frame(status_frame, bd=2, relief=tk.RAISED, bg='dark gray', padx=10, pady=2)
         line.pack(fill=tk.X)
@@ -199,7 +191,7 @@ class ItemForm():
         history_bar=tk.Scrollbar(status_frame)
         history_bar.pack(side=tk.RIGHT, fill=tk.Y)
         history_box_height=5
-        self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='<'),
+        self.history_box=tk.Text(status_frame, height=history_box_height, borderwidth=1, font=self.theme.font(size='>'),
                                  relief=tk.FLAT, width=self.widget_width, fg='dark grey')
         self.history_box.pack(side=tk.TOP, fill=tk.X)
         self.history_box.configure(yscrollcommand=history_bar.set)
@@ -210,10 +202,10 @@ class ItemForm():
         debug('item.tags={}'.format(item.tags))
         tags_frame=tk.Frame(self.form)
         tags_frame.pack(fill=tk.X, padx=2, pady=2)
-        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size='<'), anchor="w", width="10", relief=tk.FLAT, fg='black')
+        tags_label=tk.Label(tags_frame, text='Tags', font=self.theme.font(size=">"), anchor="w", width="10", relief=tk.FLAT, fg='black')
         tags_label.pack(fill=tk.X)
         self.tags_var=tk.StringVar()
-        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
+        self.tags_box=tk.Entry(tags_frame, borderwidth=2, font=self.theme.font(size='>'), relief=tk.FLAT, width=self.widget_width,
                           textvariable=self.tags_var)
         self.tags_box.pack(fill=tk.X)
         self.tags_box.bind('<Key>', self._keypress_tags)
@@ -227,7 +219,8 @@ class ItemForm():
 
         self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
         self.filebar.patterns_to_exclude=['_data_']
-        self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
+        self.filebar.add_folder(directory=bin.add_backslash_to_backslash(item.folder_path_raw()))
+        #self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
         self.filebar.draw()
 
     def _draw_description(self):
@@ -235,15 +228,16 @@ class ItemForm():
         description_frame.pack(fill=tk.X, padx=2, pady=2)
         self.description_bar=tk.Scrollbar(description_frame)
         self.description_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        description_label=tk.Label(description_frame, text='More', font=self.theme.font(size='>'), anchor="w", relief=tk.FLAT,
+                             fg='black')
+        description_label.pack(fill=tk.X)
         description_box_height=6
         self.description_box=tk.Text(description_frame, height=description_box_height, borderwidth=1,
-                                     font=self.theme.font(size='<'), relief=tk.FLAT, width=self.widget_width,
-                                     bg='light grey')
+                                     font=self.theme.font(size='>'), relief=tk.FLAT, width=self.widget_width)
         self.description_box.pack(side=tk.TOP, fill=tk.X)
         self.description_box.configure(yscrollcommand=self.description_bar.set)
         self.description_bar.configure(command=self.description_box.yview)
         self._set_description_box_text(self.item.description)
-        self._disable_description()
 
         self.description_box.bind('<Tab>', self._focus_set_status_box)
         self.description_box.bind('<Shift-Tab>', self._focus_set_title_box)
@@ -253,12 +247,6 @@ class ItemForm():
 
     def _enable_description(self):
         self.description_box.configure(state=tk.NORMAL)
-
-    def _enable_title_and_description(self, event):
-        self.title_box.configure(state=tk.NORMAL)
-        self.title_box.focus_set()
-        self._pack_description()
-        self._enable_description()
         
     def _focus_in_tags(self, event):
         self.tags_box.select_range(tk.END, tk.END)
@@ -289,7 +277,7 @@ class ItemForm():
         return self.description_box.get('1.0', tk.END).rstrip()
 
     def _keypress_status(self, event):
-        debug('ItemForm._item_form_update_status_history: {0} {1}'.format(event.state, event.keycode))
+        debug('ItemForm._keypress_status: {0} {1}'.format(event.state, event.keycode))
         if event.state==8 and event.keycode==13:
             # Enter
             if self.status_var.get() not in ('', self._status_doc):
@@ -301,8 +289,6 @@ class ItemForm():
             # Escape
             self.status_var.set(self._status_doc)
             self._focus_in_status()
-        #else:
-           # self.status_var_backup=self.status_var.get()
 
     def _keypress_title(self, event):
         debug('ItemForm._keypress_title: state={0} keycode={1}'.format(event.state, event.keycode))
@@ -353,10 +339,6 @@ class ItemForm():
 
     def test(self, event):
         debug('TEST')
-
-    def _unpack_description(self):
-        self.description_box.pack_forget()
-        self.description_bar.pack_forget()
 
     def _update_tags(self, event):
         """
@@ -411,6 +393,10 @@ class BaseItem():
         self.key=bin.random_string(20)
         self.x=x
         self.y=y
+        # Stores entire status history including a datetime stamp.
+        self._status=[]
+        # Stores only the text of the last status.
+        self.status_text_only=None
 
         # None marks a new item when drawing.
         self.state=None
@@ -424,7 +410,7 @@ class BaseItem():
             self.title=text
 
         self.folder_path=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
-        bin.mkdir(self.folder_path)
+        bin.mkdir(self.folder_path_raw())
 
     def get_label(self, int=None):
         if int is None:
@@ -440,6 +426,9 @@ class BaseItem():
         """
         self._selected=False
 
+    def folder_path_raw(self):
+        return bin.add_backslash_to_backslash(self.folder_path)
+        
     @property
     def text (self):
         return self._text
@@ -481,6 +470,23 @@ class BaseItem():
             self._selected=True
         else:
             self._selected=False
+
+    @property
+    def status (self):
+        return self.status_text_only
+
+    @status.setter
+    def status(self, text):
+        # Status history is stored in a list, with most recent status first, we also add a timestamp.
+        self._status.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n')
+        self.status_text_only=text
+        # If label display is using status, we need to force it to update.
+        # Todo: This is ugly.
+        self.label_int=self.label_int
+
+    def all_statuses(self):
+        for status in self._status:
+                yield status
 
     @property
     def purged (self):
@@ -652,10 +658,8 @@ class Task(BaseItem):
 
     def __init__(self, root_path, text, x, y, dt, image_path=None):
         super().__init__(root_path, text, x, y, dt, image_path)
-        self._status=None
         self.type='task'
         self.size=8
-        self.status_log_file_path=os.path.join(self.folder_path, 'status.txt')
         self.drags=True
         self._parse_text(text)
         self.color='green'
@@ -680,7 +684,7 @@ class Task(BaseItem):
                 return '{0}@{1}'.format(self.get_primary_tag(), self.title)
             else:
                 return '{0}'.format(self.title)
-        elif int == 32 and self.status:
+        elif int == 3 and self.status:
             return '<{0}>'.format(self.status.rstrip())
         else:
             return self.text
@@ -694,22 +698,6 @@ class Task(BaseItem):
         self._text=text
         self._parse_text(text)
 
-    @property
-    def status (self):
-        return self._status
-
-    @status.setter
-    def status(self, text):
-        # Status history is stored in a list, with most recent status first, we also add a timestamp.
-        # self.status_history.insert(0, bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n')
-        self._status=text
-        # If label display is using status, we need to force it to update.
-        self.label_int=self.label_int
-        text=bin.to_char(datetime.datetime.now(), '%a %b %d %I:%M %p') + ' ' + text + '\n'
-        log=bin.reverse_logger(self.status_log_file_path)
-        log.write(text)
-        log.close()
-        
     def _parse_text(self, text):
         """
         Take the input text and parse out tags, title and current status.
@@ -832,6 +820,8 @@ class Timeline():
         self.canvas=kwargs['canvas']
         self.theme=theme.Theme()
 
+        self.theme.font_name="Courier"
+        
         self.item_label_int=0
 
         self.root.protocol("WM_DELETE_WINDOW", self._close)
@@ -1051,8 +1041,10 @@ class Timeline():
         #self.menu.add_command(label="Rename", command=self._open_item_rename_form)
 
     def callback(self, dict):
+        debug('Timeline.callback')
         cbkey=dict['cbkey']
         if cbkey==ItemForm.CLOSE_FORM:
+            self.unselect_all_items(redraw=True)
             self.draw_items()
             
     def _close(self):
@@ -1069,7 +1061,7 @@ class Timeline():
             self.statusbox.clear()
 
     def draw_items(self):
-        debug('Timeline.draw_items')
+        debug2('Timeline.draw_items')
         self.canvas.delete('all_items')
         self._map_object_id_to_item_key={}
         # ToDo: Probably needs to be changed to an iterator.
@@ -1115,7 +1107,7 @@ class Timeline():
 
                 x=bin.days_between_two_dates(item.datetime, timeline['begin_time'])/timeline['total_days']*self.width
                 y=timeline['y']+(timeline['height']*item.y_as_pct_of_height)
-                if item.selected and (self._timeline_of_last_selected_item==timeline['name'] or self._timeline_of_last_selected_item is None):
+                if item.selected and (self._timeline_of_last_selected_item==timeline['name']):
                     item_borderwidth=2
                     item_outline='black'
                     item_dash=(1,2)
@@ -1145,11 +1137,12 @@ class Timeline():
                     object_id=self.canvas.create_text(right+5, y-2, text=item.get_label(self.item_label_int), font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
 
     def _delete_selected_items(self, redraw=False):
+        debug("Timeline_delete_selected_items")
         for item in self.items.all_selected_items():
             item.deleted=True
             if redraw:
                 self.draw_item(item, delete_first=True)
-        self._item_unselect_all(redraw=True)
+        self.unselect_all_items(redraw=True)
             
     def dump(self, file_name):
         f=open(file_name, mode='w')
@@ -1200,11 +1193,12 @@ class Timeline():
         return y_as_pct_of_height
 
     def _hide_selected_items(self):
+        debug('Timeline._hide_selected_items')
         for item in self.items.all_selected_items():
             item.hidden=True
             item.selected=False
             self.draw_item(item, delete_first=True)
-        self._item_unselect_all(redraw=True)
+        self.unselect_all_items(redraw=True)
 
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
@@ -1245,7 +1239,8 @@ class Timeline():
         self._delete_selected_items(redraw=True)
         
     def _keypress_escape(self):
-        self._item_unselect_all(redraw=True)
+        debug('Timeline._keypress_escape')
+        self.unselect_all_items(redraw=True)
 
     def _keypress_f1(self):
         self.item_label_int+=1
@@ -1282,21 +1277,9 @@ class Timeline():
         self.draw_items()
 
     def _keypress_shift_delete(self):
+        debug('Timeline._keypress_shift_delete')
         self._purge_selected_items(redraw=False)
-        self._item_unselect_all(redraw=True)
-
-    def _item_unselect_all(self, redraw=False):
-
-        for object_id in self.canvas.gettags('selected'):
-            self.canvas.dtag(object_id, 'selected')
-
-        for item in self.items.all_items():
-            if item.selected:
-                item.selected=None
-                if redraw:
-                    self.draw_item(item, delete_first=True)
-
-        self._total_items_selected=0
+        self.unselect_all_items(redraw=True)
 
 
     def _get_item_from_object(self, object_id):
@@ -1333,7 +1316,7 @@ class Timeline():
             return
 
         if self._total_items_selected > 0 and self._timeline_of_last_selected_item!=timeline['name']:
-            self._item_unselect_all(redraw=False)
+            self.unselect_all_items(redraw=False)
 
         if self._total_items_selected==0:
             item.selected=True
@@ -1342,9 +1325,9 @@ class Timeline():
         elif self._total_items_selected==1 and not self.keyboard.control_key_down:
             if item.selected:
                 item.selected=False
-                self._item_unselect_all(redraw=False)
+                self.unselect_all_items(redraw=False)
             else:
-                self._item_unselect_all(redraw=True)
+                self.unselect_all_items(redraw=True)
                 item.selected=True
                 self._total_items_selected=1
                 self.add_tag_to_object(object_id, 'selected')
@@ -1358,7 +1341,7 @@ class Timeline():
                 self._total_items_selected+=1
                 self.add_tag_to_object(object_id, 'selected')
         elif self._total_items_selected > 1 and not self.keyboard.control_key_down and not item.selected:
-                self._item_unselect_all(redraw=True)
+                self.unselect_all_items(redraw=True)
                 item.selected=True
                 self._total_items_selected=1
 
@@ -1476,30 +1459,34 @@ class Timeline():
                     item.save()
                     if self.cbfunc and item.type != 'image':
                         self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
-                    self._item_unselect_all(redraw=False)
+                    debug('not abort drag: x={0} y={1}'.format(delta_x, delta_y))
+                    self.unselect_all_items(redraw=False)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
                 if self.cbfunc:
                     # Add the x and y drop locations.
                     self.cbfunc({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
-
-            self._dragging={}
-            self.statusbox.clear()
         elif not self.keyboard.control_key_down:
-            self._item_unselect_all(redraw=False)
+            self.unselect_all_items(redraw=False)
             item.selected=True
             self.add_tag_to_object(object_id, 'selected')
             self._total_items_selected=1
 
+        self._dragging={}
+        self.statusbox.clear()
         self.draw_items()
-        
+    
     def _item_mouse_doubleclick(self, event):
         debug('Timeline._item_mouse_doubleclick')
         object_id,item,timeline,time=self._get_xy(event.x, event.y)
         self.root.config(cursor='wait')
         self.root.update_idletasks()
         if item.type=='task':
-            f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
+            self.unselect_all_items(redraw=True)
+            if self.keyboard.shift_key_down:
+                bin.open_file_using_default_program(item.folder_path_raw())
+            else:
+                f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
         elif item.type=='remark':
             self._timeline_disable_window()
             if item.has_tags():
@@ -1510,6 +1497,7 @@ class Timeline():
             root=self.root,
             canvas=self.canvas,
             text=text)
+            self.unselect_all_items(redraw=True)
             if f.text:
                 item.text=f.text
                 item.save()
@@ -1517,14 +1505,19 @@ class Timeline():
             self._timeline_enable_window()
             self.canvas.focus_force()
         elif item.type=='link':
-            f=modalinputbox.ModalInputBox(
-            root=self.root,
-            canvas=self.canvas,
-            text=item.text)
-            if f.text:
-                item.text=f.text
-                item.save()
-                self.draw_items()
+            if self.keyboard.shift_key_down:
+                bin.open_file_using_default_program(item.title)
+                self.unselect_all_items(redraw=True)
+            else:
+                f=modalinputbox.ModalInputBox(
+                root=self.root,
+                canvas=self.canvas,
+                text=item.text)
+                self.unselect_all_items(redraw=True)
+                if f.text:
+                    item.text=f.text
+                    item.save()
+                    self.draw_items()
         self.root.configure(cursor='')
         self.root.update_idletasks()
 
@@ -1602,12 +1595,7 @@ class Timeline():
         if self.keyboard.shift_key_down:
             self.keyboard.shift_key_down=False
             self._timeline_mouse_click_add_item(event.x, event.y)
-        elif self.keyboard.control_key_down:
-            self.keyboard.control_key_down=False
-            # self._timeline_mouse_click_add_item(event.x, event.y)
-            debug('Control key is down!')
         elif t:
-            #self._save_timeline_begin_times()
             self._dragging['timeline']=t
             self._dragging['timeline_time']=self.timeline_time
             # Need a reference to the original mouse down item.
@@ -1689,10 +1677,12 @@ class Timeline():
             self.draw_items()
 
     def _timeline_mouse_up(self, event):
-        debug2("timeline_mouse_up")
-        self.draw_items()
-        self._dragging_timeline={}
-        self.statusbox.clear()
+        debug("Timeline._timeline_mouse_up")
+        if "timeline" in self._dragging.keys():
+            x=event.x-self._dragging['x']
+            if x==0:
+                # Items will stay selected if an actual timeline drag has taken place, but if not then all items will be unselected.
+                self.unselect_all_items(redraw=True)
 
     def _timelines_draw(self):
         debug2('Timeline._timelines_draw')
@@ -1759,3 +1749,19 @@ class Timeline():
     def update_background_tasks(self):
         debug('Timeline.update_background_tasks')
         self._draw_current_time()
+
+    def unselect_all_items(self, redraw=False):
+        debug('Timeline.unselect_all_items')
+
+        # Remove selected tag from all items.
+        for object_id in self.canvas.gettags('selected'):
+            self.canvas.dtag(object_id, 'selected')
+
+        # Set selected attribute to false for all items.
+        for item in self.items.all_items():
+            if item.selected:
+                item.selected=None
+                if redraw:
+                    self.draw_item(item, delete_first=True)
+
+        self._total_items_selected=0
