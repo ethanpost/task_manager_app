@@ -118,6 +118,7 @@ class ItemForm():
         self.form.protocol("WM_DELETE_WINDOW", self._close_form)
         self.form.bind_class("Text","<Control-a>", self.select_all)
         self.form.bind_class("Entry","<Control-a>", self.select_all)
+        self.keyboard=keyboard
         self.theme=theme
         self.cbfunc=cbfunc
         self._status_doc='<Enter Status or #Milestone>'
@@ -212,6 +213,11 @@ class ItemForm():
         self.tags_box.bind('<FocusIn>', self._focus_in_tags)
         self.tags_var.set(','.join(item.tags))
 
+        files_frame=tk.Frame(self.form)
+        files_frame.pack(fill=tk.X, padx=2, pady=2)
+        files_label=tk.Label(files_frame, text='Files', font=self.theme.font(size=">"), anchor="w", width="10", relief=tk.FLAT, fg='black')
+        files_label.pack(fill=tk.X)
+
         canvas_frame=tk.Frame(self.form)
         canvas_frame.pack(fill=tk.X, padx=2, pady=2)
         canvas=tk.Canvas(canvas_frame, width=self.widget_width, height=60, bg='white')
@@ -220,8 +226,8 @@ class ItemForm():
         self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
         self.filebar.patterns_to_exclude=['_data_']
         self.filebar.add_folder(directory=bin.add_backslash_to_backslash(item.folder_path_raw()))
-        #self.filebar.add_files(directory=bin.add_backslash_to_backslash(item.folder_path), drags=False)
         self.filebar.draw()
+
 
     def _draw_description(self):
         description_frame=tk.Frame(self.form)

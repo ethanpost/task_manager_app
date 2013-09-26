@@ -2,11 +2,12 @@ __author__ = 'Ethan Post'
 
 import tkinter as tk
 import os
-from bin import *
+import bin
 import time
 from PIL import ImageTk, Image, ImageOps
 from debug import *
 import re
+import keyboard
 
 class FileBar():
     
@@ -21,11 +22,8 @@ class FileBar():
         self.root=kwargs['root']
         self.canvas=kwargs['canvas']
         self.height=kwargs['height']
-            
-        if 'keyboard' in kwargs.keys():
-            self.keyboard=kwargs['keyboard']
-        else:
-            self.keyboard=None
+
+        self.keyboard=keyboard.Keyboard(canvas=self.canvas)
 
         if 'x' in kwargs.keys():
             self.x=kwargs['x']
@@ -67,7 +65,7 @@ class FileBar():
         # Pointer to the first thumbnail on the file bar.
         self._object_id_of_first_file=None
                 
-        self.images_folder=os.path.join(application_root_folder(), 'images')
+        self.images_folder=os.path.join(bin.application_root_folder(), 'images')
 
         # ToDo: Add audio and video types.
         self.extensions={
@@ -82,7 +80,8 @@ class FileBar():
         self.patterns_to_exclude=[]
 
         self.canvas.tag_bind("FileBarFile", "<ButtonPress-1>",   self._thumbnail_mouse_down)
-        self.canvas.tag_bind("FileBarFile", "<B1-Motion>",       self._thumbnail_mouse_over)
+        #self.canvas.tag_bind("FileBarFile", "<B1-Motion>",       self._thumbnail_mouse_over)
+        self.canvas.tag_bind("FileBarFile", "<Motion>",       self._thumbnail_mouse_over)
         self.canvas.tag_bind("FileBarFile", "<ButtonRelease-1>", self._thumbnail_mouse_up)
         self.canvas.tag_bind("FileBarFile", "<Double-1>",        self._thumbnail_mouse_doubleclick)
 
@@ -104,7 +103,7 @@ class FileBar():
 
     def add_object(self, object_name, object_type, image_file, drags=False, is_folder=False):
         debug('FileBar.add_object')
-        i=get_photoimage_thumbnail(image_file, size=self.thumbnail_size-1, border_color='black', border_size=1)
+        i=bin.get_photoimage_thumbnail(image_file, size=self.thumbnail_size-1, border_color='black', border_size=1)
         object_id=self.canvas.create_image(self.x+int(self.height*.1), self.y+int(self.height*.1), anchor=tk.NW, image=i, state=tk.NORMAL, tags='FileBarFile')
 
         if not self._object_id_of_first_file:
@@ -185,10 +184,16 @@ class FileBar():
         # Store the original position in case we need to abort the drag and drop.
         self._dragging['x']=self._dragging['x0']=event.x
         self._dragging['y']=self._dragging['y0']=event.y
-        self.canvas.focus_set()
+        self.canvas.focus_force()
+        #self.canvas.focus_set()
 
     def _thumbnail_mouse_over(self, event):
-        debug2("FileBar._thumbnail_mouse_over")
+        debug("FileBar._thumbnail_mouse_over")
+
+        self.canvas.focus_set()
+
+        if len(self._dragging)==0:
+            return
 
         if not self._dragging['object_id']:
             return
@@ -227,22 +232,22 @@ class FileBar():
                 self.canvas.move(object_id, delta_x, delta_y)
 
     def _thumbnail_drag_abort(self, x, y):
-        debug('_thumbnail_drag_abort: x={0} y={1} coords={2}'.format(x, y, self._dragging['coords']))
+        debug('Filebar._thumbnail_drag_abort: x={0} y={1} coords={2}'.format(x, y, self._dragging['coords']))
         object_id=self._dragging['object_id']
-        #delta_x = self._dragging["x0"] - x
-        #delta_y = self._dragging["y0"] - y
-        #self.canvas.move(self._dragging['object_id'], delta_x, delta_y)
         self.canvas.coords(object_id, x, y)
 
     def _thumbnail_mouse_up(self, event):
-        debug("_thumbnail_mouse_up")
+        debug("Filebar._thumbnail_mouse_up")
+
+        if len(self._dragging)==0:
+            return
+
         if self._dragging['axis']!='?':
             object_id=self._dragging['object_id']
             if self.cbfunc:
                 coords=self.canvas.coords(object_id)
                 self.cbfunc({'cbkey':self.DRAG_AND_DROP, 'object':self.objects[object_id], 'x':int(coords[0]), 'y':int(coords[1])})
             self._thumbnail_drag_abort(int(self._dragging['coords'][0]), int(self._dragging['coords'][1]))
-
 
         self._dragging={}
         
@@ -259,23 +264,20 @@ class FileBar():
                 self.draw()
                 
             elif object['is_folder']:
-                self.clear()
-                self.add_object(
-                    object_name=object['name'],
-                    object_type='upfolder',
-                    image_file=os.path.join(self.images_folder, 'left_arrow.jpg'),
-                    drags=True,
-                    is_folder=True)
-                self.add_files(directory=object['name'], drags=True)
-
-                #self.clear()
-#                self.add_files(
-#                    object['name'],
-#                    drags=True
-#                )
-#                self.draw()
+                if self.keyboard.shift_key_down:
+                    bin.open_file_using_default_program(object['name'])
+                    self.keyboard.shift_key_down=False
+                else:
+                    self.clear()
+                    self.add_object(
+                        object_name=object['name'],
+                        object_type='upfolder',
+                        image_file=os.path.join(self.images_folder, 'left_arrow.jpg'),
+                        drags=True,
+                        is_folder=True)
+                    self.add_files(directory=object['name'], drags=True)
             else:
-                open_file_using_default_program(self.objects[object_id]['name'])
+                bin.open_file_using_default_program(self.objects[object_id]['name'])
                 # sublime(self.files[object_id]['file-name'])
 
     def _get_valid_delta(self, x):
