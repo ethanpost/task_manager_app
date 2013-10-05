@@ -21,6 +21,7 @@ class Keyboard():
         self.control_key_down=False
         self.f1_key_down=False
         self.f2_key_down=False
+        self.f3_key_down=False
 
         # A reference to the canvas (required)
         self.canvas=kwargs['canvas']
@@ -42,6 +43,8 @@ class Keyboard():
                 self.f1_key_down=True
             elif event.keycode==113:
                 self.f2_key_down=True
+            elif event.keycode==114:
+                self.f3_key_down=True
 
         if self.cbfunc:
             self.cbfunc({'cbkey': self.KEYPRESS, 'state': event.state, 'keycode':event.keycode})
@@ -58,4 +61,6 @@ class Keyboard():
             self.f1_key_down=False
         elif event.keycode==113:
             self.f2_key_down=False
+        elif event.keycode==114:
+            self.f3_key_down=False
 

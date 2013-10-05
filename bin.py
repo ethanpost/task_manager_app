@@ -12,7 +12,22 @@ from debug import *
 import datetime
 import subprocess
 from PIL import ImageTk, Image, ImageOps
+from calendar import monthrange
 
+def sort_lists_in_list(data, column_number=0):
+    """
+    Take a list of lists and sort the outer list using one of the columns in the inner lists.
+
+    Should also work with tuples.
+
+    http://stackoverflow.com/questions/3121979/how-to-sort-list-tuple-of-lists-tuples
+    """
+    r = sorted(data, key=lambda func : func[column_number])
+    return r
+    
+def get_number_of_days_in_month_from_datetime(datetime):
+    return monthrange(datetime.year, datetime.month)[1]
+    
 def touch (file_path):
     if not os.path.isfile(file_path):
         open(file_path, 'w').close()
