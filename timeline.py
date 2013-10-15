@@ -363,6 +363,8 @@ class TimelineLane():
         self.y=y
         self.height=height
         self.total_days=total_days
+        self.min_days=total_days/3
+        self.max_days=total_days*4
         self._time=None
         self.label_format=label_format
         self.right=None
@@ -917,9 +919,9 @@ class Timeline():
         self._map_object_id_to_item_key={}
 
         if 'cbfunc' in kwargs.keys():
-            self.cbfunc=kwargs['cbfunc']
+            self.do_callback=kwargs['cbfunc']
         else:
-            self.cbfunc=None
+            self.do_callback=None
 
         self.canvas.focus_set()
 
@@ -1007,26 +1009,26 @@ class Timeline():
 
 
     def add_tag_to_object(self, object_id, tag):
+        """
+        Add a tag to a canvas object.
+        """
         tags=self.canvas.gettags(object_id)
         if tag not in tags:
             self.canvas.addtag_withtag(tag, object_id)
 
-    def _add_item_to_timeline(self, item):
-        self.items.items[item.key]=item
-        item.save()
-        if self.cbfunc:
-            self.cbfunc({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items.get_by_key(item.key)})
-
     def _adjust_timeline_total_days(self, timeline, more_days=None, less_days=None):
+        debug('Timeline._adjust_timeline_total_days')
+        
         if more_days:
             negative_or_positive=+1
         else:
             negative_or_positive=-1
-            
-        factor={'hourly': 60/1440, 'daily': 1, 'monthly': 30}[timeline.name]
-        min_days={'hourly': 120/1440, 'daily': 2, 'monthly': 60}[timeline.name]
-        
-        if timeline.total_days > min_days or negative_or_positive > 0:
+
+        factor=timeline.total_days/15
+
+        debug('total_days={0} min_days={1} max_days={2}'.format(timeline.total_days, timeline.min_days, timeline.max_days))
+        if (more_days and timeline.total_days < timeline.max_days) or \
+           (less_days and timeline.total_days > timeline.min_days):
             timeline.total_days+=factor*negative_or_positive
             self._timelines_draw_details(timeline)
             self.draw_items()
@@ -1044,7 +1046,7 @@ class Timeline():
         if event.widget.widgetName != 'canvas':
             return
         
-        debug2('Timeline._timeline_mouse_wheel')
+        debug('Timeline._timeline_mouse_wheel')
 
         object_id,item,timeline,time=self._get_xy(event.x, event.y)
 
@@ -1549,6 +1551,7 @@ class Timeline():
                 top_of_item=bottom_of_item+self._vertical_distance_between_items
 
             if rollback:
+                debug('Rolling Back!')
                 for data in rollback_data:
                     data[0].y=data[1]
                     data[0].y_as_pct_of_height=data[2]
@@ -1568,6 +1571,12 @@ class Timeline():
 
         self.draw_items()
 
+    def select_item(self, item, timeline, object_id):
+        item.selected=True
+        self._total_items_selected+=1
+        self.add_tag_to_object(object_id, 'selected')
+        self._timeline_of_last_selected_item=timeline
+
     def _item_mouse_down(self, event):
         debug('Timeline._item_mouse_down')
 
@@ -1582,44 +1591,34 @@ class Timeline():
             self.unselect_all_items(redraw=False)
 
         if self._total_items_selected==0:
-            item.selected=True
-            self._total_items_selected=1
-            self.add_tag_to_object(object_id, 'selected')
+            self.select_item(item, timeline, object_id)
         elif self._total_items_selected==1 and not self.keyboard.control_key_down:
             if item.selected:
                 item.selected=False
                 self.unselect_all_items(redraw=False)
             else:
                 self.unselect_all_items(redraw=True)
-                item.selected=True
-                self._total_items_selected=1
-                self.add_tag_to_object(object_id, 'selected')
+                self.select_item(item, timeline, object_id)
         elif self._total_items_selected>=1 and self.keyboard.control_key_down:
             if item.selected:
                 item.selected=False
                 self._total_items_selected-=1
                 self.canvas.dtag(object_id, 'selected')
             else:
-                item.selected=True
-                self._total_items_selected+=1
-                self.add_tag_to_object(object_id, 'selected')
+                self.select_item(item, timeline, object_id)
         elif self._total_items_selected > 1 and not self.keyboard.control_key_down and not item.selected:
                 self.unselect_all_items(redraw=True)
-                item.selected=True
-                self._total_items_selected=1
+                self.select_item(item, timeline, object_id)
 
         if self._total_items_selected==0:
             self._timeline_of_last_selected_item=None
-        else:
-            self._timeline_of_last_selected_item=timeline
 
             # Shift-Delete should purge all selected items.
             # Space-bar should hide or unhide all selected items.
             # Space-bar should undelete all selected items.
             
         if item.drags and not self.keyboard.control_key_down:
-            item.selected=True
-            self.add_tag_to_object(object_id, 'selected')
+            self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self._dragging['all_coords']={}
             self._dragging['item']=item
@@ -1721,20 +1720,18 @@ class Timeline():
                     del self._map_object_id_to_item_key[object_id]
                     self.draw_item(item)
                     item.save()
-                    if self.cbfunc and item.type != 'image':
-                        self.cbfunc({'cbkey': self.DRAG_AND_DROP, 'item': item})
+                    if self.do_callback and item.type != 'image':
+                        self.do_callback({'cbkey': self.DRAG_AND_DROP, 'item': item})
                     debug('not abort drag: x={0} y={1}'.format(delta_x, delta_y))
                     self.unselect_all_items(redraw=False)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
-                if self.cbfunc:
+                if self.do_callback:
                     # Add the x and y drop locations.
-                    self.cbfunc({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
+                    self.do_callback({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
         elif not self.keyboard.control_key_down:
             self.unselect_all_items(redraw=False)
-            item.selected=True
-            self.add_tag_to_object(object_id, 'selected')
-            self._total_items_selected=1
+            self.select_item(item, timeline, object_id)
 
         self._dragging={}
         self.statusbox.clear()
@@ -1902,6 +1899,9 @@ class Timeline():
         self.canvas.focus_force()
 
     def _timeline_mouse_click_add_item(self, x, y):
+        """
+        Present user with an input box and create a new item on the timeline.
+        """
         timeline=self._get_timeline_from_xy(x, y)
 
         if not timeline:
@@ -1914,6 +1914,7 @@ class Timeline():
             canvas=self.canvas,
             text=''
         )
+
         if form.text:
             item_type=get_item_type_from_text(form.text)
             if item_type=='link':
@@ -1923,7 +1924,10 @@ class Timeline():
             elif item_type=='task':
                 new_item=Task(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
 
-            self._add_item_to_timeline(new_item)
+            self.items.items[new_item.key]=new_item
+            new_item.save()
+            if self.do_callback:
+                self.do_callback({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items.get_by_key(new_item.key)})
 
         self._timeline_enable_window()
 
@@ -2003,10 +2007,7 @@ class Timeline():
                     if 'item' in self.canvas.gettags(oid):
                         item=self._get_item_from_object(oid)
                         # ToDo: This item selected business is just ugly.
-                        item.selected=True
-                        self._total_items_selected+=1
-                        self.add_tag_to_object(oid, 'selected')
-                        self._timeline_of_last_selected_item=t
+                        self.select_item(item, t, oid)
                 self.draw_items()
         elif "timeline" in self._dragging.keys():
             x=event.x-self._dragging['x']
