@@ -419,7 +419,8 @@ class BaseItem():
         self.x=None
         self.y=None
         # Used to position the item on the hourly, daily and monthly timeline.
-        self.y_as_pct_of_height=None
+        self._y_as_pct_of_height=None
+        self._backup={}
         # Shape to display on the timeline.
         self.shape='rectangle'
         # Path to image to display instead of a shape.
@@ -447,7 +448,7 @@ class BaseItem():
         self.hidden=False
         self.key=bin.random_string(20)
         self.x=x
-        self.y=y
+        self._y=y
         # Stores entire status history including a datetime stamp.
         self._status=[]
         # Stores only the text of the last status.
@@ -467,6 +468,32 @@ class BaseItem():
         self.folder_path=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
         bin.mkdir(self.folder_path_raw())
 
+        self.init()
+
+    @property
+    def y_as_pct_of_height(self):
+        return self._y_as_pct_of_height
+
+    @y_as_pct_of_height.setter
+    def y_as_pct_of_height(self, pct):
+        self._backup['y_as_pct_of_height']=self._y_as_pct_of_height
+        self._y_as_pct_of_height=pct
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._backup['y']=self._y
+        self._y=y
+
+    def restore(self):
+        if 'y_as_pct_of_height' in self._backup.keys():
+            self._y_as_pct_of_height=self._backup['y_as_pct_of_height']
+        if 'y' in self._backup.keys():
+            self._y=self._backup['y']
+
     def get_label(self, int=None):
         if int is None:
             int=self.label_int
@@ -480,6 +507,12 @@ class BaseItem():
         Some housekeeping when we initially load the item from the .dat file.
         """
         self._selected=False
+        if not hasattr(self, '_y_as_pct_of_height'):
+            self._y_as_pct_of_height=None
+        if not hasattr(self, '_backup'):
+            self._backup={}
+        if not hasattr(self, '_y'):
+            self._y=self.y
 
     def folder_path_raw(self):
         return bin.add_backslash_to_backslash(self.folder_path)
@@ -718,12 +751,6 @@ class Task(BaseItem):
         self.drags=True
         self._parse_text(text)
         self.color='green'
-
-    def init(self):
-        """
-        Some housekeeping when we initially load the item from the .dat file.
-        """
-        self.selected=False
 
     def get_label(self, int=None):
         debug2('Task.get_label: int={}'.format(int))
@@ -1002,6 +1029,7 @@ class Timeline():
             t.load()
 
         self._vertical_distance_between_items=None
+        self._horizontal_distance_between_items=None
         
         self._timelines_draw()
 
@@ -1367,18 +1395,21 @@ class Timeline():
                 t.time=time
 
     def keypress(self, dict):
-        debug2('Timeline.keypress: {}'.format(dict))
+        debug('Timeline.keypress: {}'.format(dict))
 
         timeline=self._get_timeline_from_xy(x=self.mouse[0], y=self.mouse[1])
 
         if timeline:
             move_days={'hourly': 15/1440, 'daily': 8/24, 'monthly': 4}[timeline.name]
 
-        if dict['state']==262152 and dict['keycode']==37 and timeline:
+        # If left arrow...
+        if dict['state']>1000 and dict['keycode']==37 and timeline:
             time=timeline.time+datetime.timedelta(days=move_days)
-            # Left Arrow
             if self._total_items_selected > 1:
-                self._items_align('left')
+                if self.keyboard.shift_key_down:
+                    self._items_align('decrease_horizontal')
+                else:
+                    self._items_align('left')
             elif self.sync_timelines:
                 self._timelines_set_time(time)
                 self._timelines_draw()
@@ -1387,17 +1418,21 @@ class Timeline():
                 timeline.time=time
                 self._timelines_draw()
                 self.draw_items()
-
-        elif dict['state']==262152 and dict['keycode']==38 and timeline:
-            # Up Arrow
+        # If up arrow...
+        elif dict['state']>1000 and dict['keycode']==38 and timeline:
             if self._total_items_selected > 1:
-                self._items_align('up')
-            
-        elif dict['state']==262152 and dict['keycode']==39 and timeline:
+                if self.keyboard.shift_key_down:
+                    self._items_align('decrease_vertical')
+                else:
+                    self._items_align('top')
+        # If right arrow...
+        elif dict['state']>1000 and dict['keycode']==39 and timeline:
             time=timeline.time+datetime.timedelta(days=move_days)
-            # Right Arrow
             if self._total_items_selected > 1:
-                self._items_align('right')
+                if self.keyboard.shift_key_down:
+                    self._items_align('increase_horizontal')
+                else:
+                    self._items_align('right')
             elif self.sync_timelines:
                 self._timelines_set_time(time)
                 self._timelines_draw()
@@ -1406,12 +1441,12 @@ class Timeline():
                 timeline.time=time
                 self._timelines_draw()
                 self.draw_items()
-
-        elif dict['state']==262152 and dict['keycode']==40 and timeline:
-            # Down Arrow
-            if self._total_items_selected > 1:
-                self._items_align('down')
-
+        # If down arrow...
+        elif dict['state']>1000 and dict['keycode']==40 and timeline:
+            if self.keyboard.shift_key_down:
+                self._items_align('increase_vertical')
+            else:
+                self._items_align('bottom')
         elif dict['state']>100 and dict['keycode']==46:
             if self.keyboard.shift_key_down:
                self._keypress_shift_delete()
@@ -1504,71 +1539,107 @@ class Timeline():
         debug2('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
         return (object_id, item, timeline, time)
 
-    def _items_align(self, direction='left'):
 
-        if direction in ('up', 'down'):
-            all_selected_items=[]
-            for item in self.items.all_selected_items():
-                all_selected_items.append([item.y, item])
-            # Sort the list from item at the top to item at the bottom using y position.
-            sorted_items=bin.sort_lists_in_list(all_selected_items, 0)
-            highest_value_of_y=sorted_items[-1][0]
+    def _items_align(self, direction):
+        debug('Timeline._items_align: direction={}'.format(direction))
+        times=[]
+        all_selected_items=[]
 
-            original_vertical_distance=self._vertical_distance_between_items
+        for item in self.items.all_selected_items():
+            all_selected_items.append([item.y, item, item.x])
+            times.append(item.datetime)
 
-            top_of_first_item=int(sorted_items[0][0])
-            bottom_of_last_item=int(sorted_items[-1][0]+sorted_items[-1][1].size)
-            number_of_items=len(sorted_items)
+        number_of_items=len(all_selected_items)
 
-            if not self._vertical_distance_between_items:
-                self._vertical_distance_between_items=int((bottom_of_last_item-top_of_first_item)/number_of_items)
-            else:
-                # Increase or decrease the vertical distance each time we run.
-                self._vertical_distance_between_items+={'up': 5, 'down': -5}[direction]
-
-            # Vertical distance can't be less than 1.
-            if self._vertical_distance_between_items < 1:
-                self._vertical_distance_between_items=1
-
-            # Get the y position of the first item as our starting point.
-            top_of_item=top_of_first_item
-            rollback=False
-            rollback_data=[]
-            for data in sorted_items:
-                item_size=data[1].size
-                bottom_of_item=top_of_item+item_size
-                if bottom_of_item > self._timeline_of_last_selected_item.bottom:
-                    self._vertical_distance_between_items=original_vertical_distance
-                    rollback=True
-                    break
-                pct_of_height=self._get_y_as_pct_of_height_from_xy(data[1].x, top_of_item)
-                if pct_of_height is None:
-                    rollback=True
-                    break
-                rollback_data.append([data[1], data[1].y, data[1].y_as_pct_of_height])
-                data[1].y=top_of_item
-                data[1].y_as_pct_of_height=pct_of_height
-                top_of_item=bottom_of_item+self._vertical_distance_between_items
-
-            if rollback:
-                debug('Rolling Back!')
-                for data in rollback_data:
-                    data[0].y=data[1]
-                    data[0].y_as_pct_of_height=data[2]
-
-        elif direction in ('left','right'):
-            times=[]
-            for item in self.items.all_selected_items():
-                times.append(item.datetime)
-
-            if direction=='left':
+        if direction in ('right', 'left'):
+            if direction=='right':
+                time=max(times)   
+            elif direction=='left':
                 time=min(times)
-            elif direction=='right':
-                time=max(times)
-
             for item in self.items.all_selected_items():
                 item.datetime=time
+        elif direction=='top':
+            sorted_items=bin.sort_lists_in_list(all_selected_items, 0)
+            for item in self.items.all_selected_items():
+                item.y=sorted_items[0][1].y
+                item.y_as_pct_of_height=sorted_items[0][1].y_as_pct_of_height
+        elif direction=='bottom':
+            sorted_items=bin.sort_lists_in_list(all_selected_items, 0)
+            for item in self.items.all_selected_items():
+                item.y=sorted_items[-1][1].y
+                item.y_as_pct_of_height=sorted_items[-1][1].y_as_pct_of_height
+        elif direction in ('increase_vertical', 'decrease_vertical') and number_of_items > 1:
 
+            rollback=False
+            items_modified=[]
+            distance_between_items=[]
+
+            items_sorted_from_top_down=bin.sort_lists_in_list(all_selected_items, 0)
+            top_of_first_item=int(items_sorted_from_top_down[0][0])
+
+
+            for i in range(1, number_of_items):
+                distance_between_items.append(items_sorted_from_top_down[i][0]-items_sorted_from_top_down[i-1][0])
+
+            distance_between_items=min(distance_between_items)
+
+            if distance_between_items > 10:
+                 multiplier={'increase_vertical': 1.2, 'decrease_vertical': .8}[direction]
+            else:
+                 multiplier={'increase_vertical': 2, 'decrease_vertical': .2}[direction]
+                
+            distance_between_items=int(distance_between_items*multiplier)
+
+            # Vertical distance can't be less than 0.
+            if distance_between_items <= 0:
+                distance_between_items={'increase_vertical': 5, 'decrease_vertical': 0}[direction]
+
+            debug('distance_between_items={}'.format(distance_between_items))
+            # Get the y position of the first item as our starting point.
+            y=top_of_first_item
+            for item in items_sorted_from_top_down:
+                rollback=(y+item[1].size > self._timeline_of_last_selected_item.bottom)
+                pct_of_height=self._get_y_as_pct_of_height_from_xy(item[1].x, y)
+                rollback=pct_of_height is None or rollback
+                if rollback:
+                    break
+                item[1].y=y
+                item[1].y_as_pct_of_height=pct_of_height
+                items_modified.append(item[1])
+                y+=distance_between_items
+
+            if rollback:
+                debug('rollback!')
+                for item in items_modified:
+                    item.restore()
+
+        elif direction in ('increase_horizontal', 'decrease_horizontal'):
+
+            items_sorted_from_left_to_right=bin.sort_lists_in_list(all_selected_items, 2)
+            minutes_between_items=[]
+
+            for i in range(1, number_of_items):
+                minutes_between_items.append(bin.minutes_between_two_dates(items_sorted_from_left_to_right[i][1].datetime, items_sorted_from_left_to_right[i-1][1].datetime))
+
+            minutes_between_items=int(min(minutes_between_items))
+
+            if minutes_between_items > 10:
+                 multiplier={'increase_horizontal': 1.2, 'decrease_horizontal': .8}[direction]
+            else:
+                 multiplier={'increase_horizontal': 2, 'decrease_horizontal': .2}[direction]
+
+            minutes_between_items=int(minutes_between_items*multiplier)
+
+           # Horizontal distance can't be less than 0.
+            if minutes_between_items <= 0:
+                minutes_between_items={'increase_horizontal': 5, 'decrease_horizontal': 0}[direction]
+
+            debug('minutes_between_items={}'.format(minutes_between_items))
+            t=items_sorted_from_left_to_right[0][1].datetime
+            for item in items_sorted_from_left_to_right:
+                item[1].datetime=t
+                t=t+datetime.timedelta(minutes=minutes_between_items)
+                
         self.draw_items()
 
     def select_item(self, item, timeline, object_id):

@@ -14,6 +14,9 @@ import subprocess
 from PIL import ImageTk, Image, ImageOps
 from calendar import monthrange
 
+
+# LISTS
+# -------------------------------------------------------------------------------------------------
 def sort_lists_in_list(data, column_number=0):
     """
     Take a list of lists and sort the outer list using one of the columns in the inner lists.
@@ -24,7 +27,18 @@ def sort_lists_in_list(data, column_number=0):
     """
     r = sorted(data, key=lambda func : func[column_number])
     return r
-    
+
+def get_list_of_deltas_from_list(data, order='a-b'):
+    deltas=[]
+    l=len(data)
+    if l > 1:
+        for i in range(1, l):
+            if order=='a-b':
+                deltas.append(data[i-1]-data[i])
+            else:
+                deltas.append(data[i]-data[i-1])
+    return deltas
+
 def get_number_of_days_in_month_from_datetime(datetime):
     return monthrange(datetime.year, datetime.month)[1]
     
