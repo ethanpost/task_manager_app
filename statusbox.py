@@ -18,6 +18,7 @@ class StatusBox():
 
         self.root=kwargs['root']
         self.canvas=kwargs['canvas']
+        self.bottom=0
 
         if 'theme' in kwargs.keys():
             self.theme=kwargs['theme']
@@ -37,9 +38,9 @@ class StatusBox():
             self.width=self.canvas.winfo_reqwidth
 
         if 'height' in kwargs.keys():
-            self.height=kwargs['height']
+            self._height=kwargs['height']
         else:
-            self.height=16
+            self._height=16
 
         if 'x' in kwargs.keys():
             self.x=kwargs['x']
@@ -47,15 +48,36 @@ class StatusBox():
             self.x=0
 
         if 'y' in kwargs.keys():
-            self.y=kwargs['y']
+            self._y=kwargs['y']
         else:
-            self.y=0
+            self._y=0
         
         self.object_id=None
 
         self._text=None
 
+        self._update_bottom()
+        
         debug('Statusbox.__init__: x={0} y={1}'.format(self.x, self.y))
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._y=y
+
+    @property
+    def height(self):
+        return self._height
+    
+    @height.setter
+    def height(self, height):
+        self._height=height
+
+    def _update_bottom(self):
+        self.bottom=self.y+self.height
 
     @property
     def text(self):
@@ -65,7 +87,8 @@ class StatusBox():
     def text(self, text):
         self.clear()
         if text:
-            self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=self.theme.font(size=self.font_size), fill="black", anchor="nw", justify="left")
+            self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=self.theme.font(size=self.font_size),
+                fill="black", anchor="nw", justify="left")
 
     def clear(self):
         debug2('StatusBox.clear')

@@ -115,9 +115,11 @@ def get_photoimage_thumbnail(file_path, size=40, border_color='black', border_si
     thumbnail=ImageTk.PhotoImage(thumbnail)
     return thumbnail
 
-def nvl(var, value_if_none):
+def nvl(var, value_if_none, value_if_not_none=None):
     if var is None:
         return value_if_none
+    elif value_if_not_none is not None:
+        return value_if_not_none
     else:
         return var
 
@@ -248,14 +250,20 @@ def save_database(
     d.close()
 
 def open_database2(file_path):
-    #debug('bin.open_database2: {0}'.format(file_path))
+    """
+    Returns a saved object using file_path.
+    """
     d=shelve.open(file_path, writeback=True)
-    #debug('bin.open_database2: {0}'.format(d))
-    return d['0']
+    if d:
+        return d['0']
+    else:
+        return None
 
 def save_database2(file_path, object):
-    #debug('save_database2: {0} {1}'.format(file_path, object))
+    """
+    Saves an object to file_path.
+    """
+    #debug('object: {}'.format(object))
     d=shelve.open(file_path, writeback=True)
-    #debug('save_database2: {}'.format(d))
     d['0']=object
     d.close()

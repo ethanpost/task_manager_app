@@ -5,6 +5,7 @@ from debug import debug as debug, critical as error
 # from debug import dump as dump_debug
 import timeline
 
+
 class App(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
@@ -38,7 +39,7 @@ class App(tk.Tk):
     def configure_event(self, event):
         self.timeline.width=event.width
         self.canvas.configure(height=event.height)
-        self.timeline._timelines_draw()
+        self.timeline.draw()
         self.timeline.draw_items()
 
     def update_background_tasks(self):

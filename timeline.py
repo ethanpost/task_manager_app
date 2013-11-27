@@ -1,4 +1,5 @@
 
+# ToDo: Add flashing attribute it items.
 
 import tkinter as tk
 import re
@@ -9,6 +10,7 @@ import keyboard
 import statusbox
 import modalinputbox
 import filebar
+import taskbar
 import datetime
 import theme
 import copy
@@ -225,7 +227,7 @@ class ItemForm():
 
         self.filebar=filebar.FileBar(root=self.form, canvas=canvas, height=60)
         self.filebar.patterns_to_exclude=['_data_']
-        self.filebar.add_folder(directory=bin.add_backslash_to_backslash(item.folder_path_raw()))
+        self.filebar.add_folder(directory=bin.add_backslash_to_backslash(item.folder_with_escapes()))
         self.filebar.draw()
 
 
@@ -356,36 +358,188 @@ class ItemForm():
             self.item.tags=self.tags_var.get().split(',')
 
 class TimelineLane():
-    def __init__(self, name, type, y, height, total_days, time, label_format):
+    def __init__(self, name, theme, type, y, height, total_days, time, label_format, canvas, draw_labels=False):
         self.key=bin.random_string(20)
         self.name=name
+        self._height=height
+        self.theme=theme
         self.type=type
-        self.y=y
-        self.height=height
+        self._y=y
+        self._x=None
+        self._width=None
+        self.canvas=canvas
         self.total_days=total_days
         self.min_days=total_days/3
         self.max_days=total_days*4
         self._time=None
         self.label_format=label_format
-        self.right=None
-        self.bottom=None
-        self.center_x=None
-        self.center_y=None
+        self._right=None
+        self._bottom=None
         self.begin_time=None
         self.end_time=None
         self.first_label=None
-        self.time=time
         self.draw_labels=False
         self._database_path=os.path.join(bin.application_root_path(), 'data', 'timeline_{}.cfg'.format(self.name))
+        self._update_bottom()
+        self.object_id=None
+        self.draw_labels=draw_labels
+        self.time=time
 
     def save(self):
-        bin.save_database2(self._database_path, self)
+        d={'height':self.height,
+           'total_days': self.total_days,
+           'key': self.key}
+        bin.save_database2(self._database_path, d)
 
     def load(self):
-        o=bin.open_database2(self._database_path)
-        self.height=o.height
-        self.total_days=o.total_days
-        self.key=o.key
+        d=bin.open_database2(self._database_path)
+        if d:
+            self.height=d['height']
+            self.total_days=d['total_days']
+            self.key=d['key']
+            self.time=datetime.datetime.now()
+
+    @property
+    def bottom(self):
+        return self._bottom
+
+    @property
+    def right(self):
+        return self._right
+
+    def draw(self, x=None, y=None, width=None):
+        if x is not None:
+            self.x=x
+
+        if y is not None:
+            self.y=y
+            
+        if width is not None:
+            self.width=width
+
+        self.canvas.delete('TIMELINE'+self.key)
+        self.object_id=self.canvas.create_rectangle(self.x, self.y, self.right, self.bottom,
+            fill=self.theme.background_color, outline=self.theme.line_color, tags='timelines TIMELINE'+self.key)
+        self.canvas.tag_lower(self.object_id)
+        self.draw_details()
+
+    def _get_x_from_time(self, time):
+        return bin.days_between_two_dates(time, self.begin_time)/self.total_days*self.width
+
+    def _get_next_month(self, datetime_object):
+        r=datetime_object.replace(day=28)+datetime.timedelta(days=4)
+        r=r.replace(day=1)
+        return r
+
+    def draw_details(self):
+        """
+        Draw the lines and labels for the given timeline.
+        """
+        debug2('TimelineLane.draw_details')
+
+        self.canvas.delete(self.key)
+
+        font_size='<<'
+
+        # Get the X position of the first label.
+
+        x=self._get_x_from_time(self.first_label)
+
+        label_time=self.first_label
+        for i in range(1,100):
+            l=bin.to_char(label_time, self.label_format)
+            self.canvas.create_line(x, self.y, x, self.bottom, fill=self.theme.line_color, tags=self.key)
+            self.canvas.create_text(x+3,self.bottom-8, font=self.theme.font(size=font_size), text=l, anchor='w', fill=self.theme.font_color, tags=self.key)
+            if self.type=='hourly':
+                label_time=label_time+datetime.timedelta(hours=1)
+                if self.total_days <= 12/24:
+                    for i in range(1,4):
+                        minute_time=label_time+datetime.timedelta(days=i*15/1440)
+                        x=self._get_x_from_time(minute_time)
+                        self.canvas.create_line(x, self.y, x, self.bottom, fill='light gray', tags=self.key)
+                        self.canvas.create_text(x+3,self.y+8, font=self.theme.font(size=font_size), text=str(i*15), anchor='w', fill='light gray', tags=self.key)
+            elif self.type=='daily':
+                if self.total_days <= 3:
+                    for i in range(1,24):
+                        hourly_time=label_time+datetime.timedelta(hours=i)
+                        x=self._get_x_from_time(hourly_time)
+                        self.canvas.create_line(x, self.y, x, self.bottom, fill='light gray', tags=self.key)
+                        self.canvas.create_text(x+3,self.y+8, font=self.theme.font(size=font_size), text=str(i), anchor='w', fill='light gray', tags=self.key)
+                label_time=label_time+datetime.timedelta(hours=24)
+            elif self.type=='monthly':
+                if self.total_days <= 60:
+                    for i in range(1,bin.get_number_of_days_in_month_from_datetime(label_time)):
+                        daily_time=label_time+datetime.timedelta(hours=i*24)
+                        x=self._get_x_from_time(daily_time)
+                        self.canvas.create_line(x, self.y, x, self.bottom, fill='light gray', tags=self.key)
+                        self.canvas.create_text(x+3,self.y+8, font=self.theme.font(size=font_size), text=str(i+1), anchor='w', fill='light gray', tags=self.key)
+                label_time=self._get_next_month(label_time)
+
+            x=self._get_x_from_time(label_time)
+
+            if label_time > self.begin_time+datetime.timedelta(days=self.total_days):
+                break
+
+        # Draw red line in middle of timeline.
+        #if self.sync_timelines:
+        x=self._get_x_from_time(self.time)
+        self.canvas.create_line(x, self.y, x, self.y+self.height, fill='red', tags=self.key)
+
+        # Draw blue line at current time.
+        #tag="blue_line"
+        #self.canvas.delete(tag)
+        #x=self._get_x_from_time(datetime.datetime.now(), self.begin_time, self.total_days, self.width)
+        #self.canvas.create_line(x, self.y, x, self.y+self.height, fill='blue', tags=tag)
+        self._draw_current_time()
+
+    def _draw_current_time(self):
+        self.canvas.delete('blue_line')
+        # Draw blue line at current time.
+        x=self._get_x_from_time(datetime.datetime.now())
+        self.canvas.create_line(x, self.y, x, self.y+self.height, fill='blue', tags='blue_line')
+
+    @property
+    def y(self):
+        return self._y
+
+    @y.setter
+    def y(self, y):
+        self._y=y
+        self._update_bottom()
+
+    @property
+    def x(self):
+        return self._x
+
+    @x.setter
+    def x(self, x):
+        self._x=x
+        self._update_right()
+
+    @property
+    def width(self):
+        return self._width
+
+    @width.setter
+    def width(self, width):
+        self._width=width
+        self._update_right()
+
+    @property
+    def height(self):
+        return self._height
+
+    @height.setter
+    def height(self, height):
+        self._height=height
+        self._update_bottom()
+
+    def _update_bottom(self):
+        self._bottom=self._y+self._height
+
+    def _update_right(self):
+        if self.width is not None and self.x is not None:
+            self._right=self.x+self.width
 
     @property
     def time(self):
@@ -407,36 +561,30 @@ class TimelineLane():
 class BaseItem():
 
     COLORS=['white', 'grey', 'black', 'green', 'blue', 'yellow', 'red']
+    DISPLAY_FORMAT='none'
 
-    def __init__(self, root_path, text, x, y, dt, image_path=None):
+    def __init__(self, app_folder, text, x=None, datetime=None, y=None, y_pct=None):
         # Root folder for other files and folders.
-        self.root_path=root_path
+        self._app_folder=app_folder
         # Unique 20 character key generated automatically.
-        self.key=None
+        self.key=bin.random_string(20)
         # Title of item, does not need to be unique.
         self.title=None
         # Used to store x/y position within the app at various points.
-        self.x=None
-        self.y=None
+        self.x=x
+        self._y=y
         # Used to position the item on the hourly, daily and monthly timeline.
-        self._y_as_pct_of_height=None
+        self._y_as_pct_of_height=y_pct
         self._backup={}
-        # Shape to display on the timeline.
-        self.shape='rectangle'
         # Path to image to display instead of a shape.
-        self.image_path=image_path
-        #self.state=None
+        self.image_path=None
         # Size of image or shape.
         self.size=8
         self.type=None
-        self.datetime=dt
-        self.object_id=None
-        self.private=True
-        self.version=0
+        self.datetime=datetime
         self.color='blue'
         self._selected=False
-        self.drags=True
-        self.folder_path=None
+        self.folder=None
         self.description=None
         self._text=text
         self._tags=[]
@@ -446,29 +594,54 @@ class BaseItem():
         self._deleted=False
         self._purged=False
         self.hidden=False
-        self.key=bin.random_string(20)
-        self.x=x
-        self._y=y
         # Stores entire status history including a datetime stamp.
         self._status=[]
         # Stores only the text of the last status.
         self.status_text_only=None
-
-        # None marks a new item when drawing.
-        self.state=None
-
         self.label_int=0
-
+        #self.display_format='none'
         self._parse_text(text)
 
         # At a minimum title must be set, if not we just assign text to it, but this should already be done.
         if not self.title:
             self.title=text
 
-        self.folder_path=os.path.join(self.root_path, bin.date_to_string()+'_'+bin.get_valid_path_name_from_string(self.title)).rstrip()
-        bin.mkdir(self.folder_path_raw())
+        self.folder_name='{0}_{1}'.format(bin.date_to_string(), bin.get_valid_path_name_from_string(self.title))
 
-        self.init()
+        bin.mkdir(self.folder_with_escapes())
+
+    # ToDo: Change display_label to include_label
+    def _draw(self, canvas, theme, x=None, y=None, tag=None, draw_label=False, highlight_selected=False):
+        debug('BaseItem._draw: draw_label={}'.format(draw_label))
+        if x is not None:
+            self.x=x
+        if y is not None:
+            self.y=y
+
+        tags='{0} {1} {2}'.format('BaseItem', self.key, tag)
+        
+        canvas.delete(tag)
+
+        if self.selected and highlight_selected:
+            border_width=2
+            outline_color='black'
+            dash=(1,2)
+            tags='{0} {1}'.format(tags, 'selected',)
+        else:
+            border_width=1
+            outline_color='black'
+            dash=None
+
+        object_id=canvas.create_rectangle(self.x, self.y, self.x+self.size, self.y+self.size, fill=self.color,
+           outline=outline_color, tags=tags, stipple=None, width=border_width, dash=dash)
+
+        if draw_label:
+            debug('Drawing label')
+            x,y,right,bottom=canvas.coords(object_id)
+            canvas.create_text(right+5, y-2, text=self.get_label(),
+                font=theme.font(size='<<'), fill="black", tags=tag, anchor="nw", justify="left")
+
+        return object_id
 
     @property
     def y_as_pct_of_height(self):
@@ -494,15 +667,24 @@ class BaseItem():
         if 'y' in self._backup.keys():
             self._y=self._backup['y']
 
-    def get_label(self, int=None):
-        if int is None:
-            int=self.label_int
-        if int==0:
-            return ''
-        else:
-            return self.text
-    
-    def init(self):
+    def get_label(self):
+        debug('get_label: {}'.format(self.DISPLAY_FORMAT))
+        if self.DISPLAY_FORMAT=='none':
+            return None
+        elif self.DISPLAY_FORMAT=='title':
+            return self.title
+        elif self.DISPLAY_FORMAT=='tag@title':
+            if len(self.tags) > 0:
+                return '{0}@{1}'.format(self.tags[0], self.title)
+            else:
+                return self.title
+        elif self.DISPLAY_FORMAT=='status':
+            if self.status is not None:
+                return self.status
+            else:
+                return self.title
+      
+    def patch(self):
         """
         Some housekeeping when we initially load the item from the .dat file.
         """
@@ -513,9 +695,11 @@ class BaseItem():
             self._backup={}
         if not hasattr(self, '_y'):
             self._y=self.y
+        #if self.y is None:
+            #self.y=10
 
-    def folder_path_raw(self):
-        return bin.add_backslash_to_backslash(self.folder_path)
+    def folder_with_escapes(self):
+        return bin.add_backslash_to_backslash(os.path.join(self._app_folder, 'items', self.folder_name))
         
     @property
     def text (self):
@@ -608,14 +792,18 @@ class BaseItem():
             # Todo: Need to add un-delete feature.
             self._deleted=False
 
-    def move(self, root_path):
+    def move(self, app_folder):
         None
 
     def save(self):
-        debug2('BaseItem.save')
-        data_path=os.path.join(self.folder_path.strip(), '_data_')
-        bin.mkdir(data_path)
-        bin.save_database2(os.path.join(data_path, self.key), object=self)
+        debug('BaseItem.save')
+        data_folder=os.path.join(self.folder_with_escapes(), '_data_')
+        bin.mkdir(data_folder)
+        bin.save_database2(os.path.join(data_folder, self.key), object=self)
+
+#    def load(self, dict):
+#        for key in dict.keys():
+#            setattr(self, key, dict[key])
 
     def _parse_text(self, text):
         None
@@ -623,13 +811,12 @@ class BaseItem():
 class Link(BaseItem):
 
     COLORS=['light sky blue']
-    
-    def __init__(self, root_path, text, x, y, dt, image_path=None):
-        super().__init__(root_path, text, x, y, dt, image_path)
+
+    def __init__(self, app_folder, text, x=None, datetime=None, y=None, y_pct=None):
+        super().__init__(app_folder, text, x, datetime, y, y_pct)
         self.color='light sky blue'
         self.type='link'
-        self.size=8
-        self._parse_text(self.text)
+        #self._parse_text(self.text)
 
     def _parse_text(self, text):
         """
@@ -668,34 +855,16 @@ class Link(BaseItem):
 
         self.tags=are_tags
 
-    def get_label(self, int=None):
-        if int is None:
-            int=self.label_int
-
-        if int==0:
-            return None
-        elif int == 1 and self.title:
-            return self.title
-        elif int==1 and not self.title:
-            return self.text
-        elif int == 2 and self.has_tags():
-            return '{0}@{1}'.format(self.get_primary_tag(), self.title)
-        elif int == 2 and not self.has_tags():
-            return '{0}'.format(self.title)
-        else:
-            return self.title
-        
 class Remark(BaseItem):
 
     COLORS=['yellow']
 
-    def __init__(self, root_path, text, x, y, dt, image_path=None):
-        super().__init__(root_path, text, x, y, dt, image_path)
+    def __init__(self, app_folder, text, x=None, datetime=None, y=None, y_pct=None):
+        super().__init__(app_folder, text, x, datetime, y, y_pct)
         self.color='yellow'
         self.type='remark'
-        self._text=text
-        self.size=8
-        self._parse_text(self._text)
+        #self._text=text
+        #self._parse_text(self._text)
 
     def _parse_text(self, text):
         """
@@ -725,51 +894,15 @@ class Remark(BaseItem):
         else:
             self.title=self._text
 
-    def get_label(self, int=None):
-        if int is None:
-            int=self.label_int
-
-        if int==0:
-            return None
-        elif int == 1:
-            return self.title
-        elif int == 2 and self.has_tags():
-            return '{0}@{1}'.format(self.get_primary_tag(), self.title)
-        elif int == 2 and not self.has_tags():
-            return self.title
-        else:
-            return self.title
-
 class Task(BaseItem):
 
     COLORS=['green', 'blue', 'red']
 
-    def __init__(self, root_path, text, x, y, dt, image_path=None):
-        super().__init__(root_path, text, x, y, dt, image_path)
+    def __init__(self, app_folder, text, x=None, datetime=None, y=None, y_pct=None):
+        super().__init__(app_folder, text, x, datetime, y, y_pct)
         self.type='task'
-        self.size=8
-        self.drags=True
-        self._parse_text(text)
+        #self._parse_text(text)
         self.color='green'
-
-    def get_label(self, int=None):
-        debug2('Task.get_label: int={}'.format(int))
-        if int is None:
-            int=self.label_int
-
-        if int==0:
-            return None
-        elif int == 1:
-            return self.title
-        elif int == 2:
-            if self.has_tags():
-                return '{0}@{1}'.format(self.get_primary_tag(), self.title)
-            else:
-                return '{0}'.format(self.title)
-        elif int == 3 and self.status:
-            return '<{0}>'.format(self.status.rstrip())
-        else:
-            return self.text
             
     @property
     def text (self):
@@ -834,22 +967,30 @@ class Task(BaseItem):
         self.title=text
 
 class Items():
-    def __init__(self, root_dir):
+
+    label_display_formats=['none', 'title', 'tag@title', 'status']
+
+    def __init__(self, root_dir, canvas, theme):
 
         self.items={}
+        self.canvas=canvas
+        self.theme=theme
+
+        self.object_id_map={}
+
+        self.label_display_format_index=0
 
         deleted=re.compile('.*_deleted_.*')
         # Find all items. Each item has a _data_ directory.
         for data_dir in bin.find(root=root_dir, type='d', name='_data_'):
-            debug2('data_dir: {}'.format(data_dir))
             # Ignore anything with _deleted_ in the path.
             if not re.match(deleted, data_dir):
                 # The item is stored in the .dat file.
                 for file in bin.find(root=data_dir, type='f', name='.*\.dat'):
                     key=os.path.basename(file).replace('.dat', '')
-                    debug('key={0} file={1}'.format(key, file))
-                    self.items[key]=bin.open_database2(file.replace('.dat', ''))
-                    self.items[key].init()
+                    d=bin.open_database2(file.replace('.dat', ''))
+                    self.items[key]=d
+                    d.patch()
 
         # if the item is not shared and not the same version, patch it and save
         # if the item is shared and the version does not match mark it as read only
@@ -858,11 +999,29 @@ class Items():
         # should add a load for above with a directory name, then we can add
         # directories to the timeline and use the same items class.
 
+        self._total_selected=0
+
         self.patch()
 
+    def switch_label_display_format(self):
+        debug('Items.switch_label_display_format')
+        self.label_display_format_index+=1
+        if self.label_display_format_index > len(self.label_display_formats)-1:
+            self.label_display_format_index=0
+        for item in self.items.values():
+            item.DISPLAY_FORMAT=self.label_display_formats[self.label_display_format_index]
+            
     def patch(self):
         for item in self.all_items():
             None
+
+    @property
+    def total_selected(self):
+        return self._total_selected
+
+    @total_selected.setter
+    def total_selected(self, total_selected):
+        self._total_selected=total_selected
 
     def all_items(self):
         return self.items.values()
@@ -875,6 +1034,10 @@ class Items():
     def get_by_key(self, key):
         return self.items[key]
 
+    def get_by_object_id(self, object_id):
+        if object_id in self.object_id_map.keys():
+            return self.items[self.object_id_map[object_id]]
+
     def delete_by_key(self, key, save=True):
         """
         Delete an item.
@@ -886,9 +1049,75 @@ class Items():
         for item in self.all_items():
             item.save()
 
+    def draw(self, item, x=None, y=None, tag=None, draw_label=False, highlight_selected=False):
+        """
+        Draw a single item on the canvas at a single point.
+        """
+        object_id=item._draw(canvas=self.canvas, theme=self.theme, x=x, y=y, tag=tag, draw_label=draw_label,
+            highlight_selected=highlight_selected)
+        self.object_id_map[object_id]=item.key
+
+    def select(self, item):
+        """
+        Mark an item as selected.
+        """
+        item.selected=True
+        self._total_selected+=1
+
+    def unselect(self, item):
+        """
+        Mark an item as unselected.
+        """
+        item.selected=False
+        self._total_selected-=1
+        
+    def get_item_from_object_id(self, object_id):
+        key=self.object_id_map[object_id]
+        if key:
+            return self.items[key]
+
+    def unselect_all(self, draw=True):
+         # Set selected attribute to false for all items.
+        for item in self.all_items():
+            if item.selected:
+                item.selected=None
+                if draw:
+                    self.draw(item)
+               
+        self.total_selected=0
+
+class Timelines():
+    def __init__(self,  canvas, theme):
+        self.sync_timelines=True
+        self.timelines=[]
+
+        self.hourly=TimelineLane(name='hourly', theme=theme, type='hourly', y=0, height=100, total_days=8/24,
+            time=datetime.datetime.now(), label_format='%I%p', canvas=canvas, draw_labels=True)
+        self.hourly.load()
+        self.daily=TimelineLane(name='daily', theme=theme, type='daily', y=100, height=85,
+            total_days=7, time=datetime.datetime.now(), label_format='%d%a', canvas=canvas)
+        self.daily.load()
+        self.monthly=TimelineLane(name='monthly', theme=theme, type='monthly', y=185, height=70,
+            total_days=180, time=datetime.datetime.now(), label_format='%B %y', canvas=canvas)
+        self.monthly.load()
+        self.bottom=185+70
+        self.timelines.append(self.hourly)
+        self.timelines.append(self.daily)
+        self.timelines.append(self.monthly)
+
+    def draw(self, x=None, y=None, width=None):
+        if y is None:
+            _y=0
+        else:
+            _y=y
+        for timeline in self.timelines:
+            timeline.draw(x=x, y=_y, width=width)
+            _y=timeline.bottom
+        self.bottom=_y
+
 class Timeline():
 
-    # Callback identifiers.
+    # Callback identifiers.s
     DRAG_AND_DROP=7000
     CANCEL_DRAG_AND_DROP=7001
     ADD_ITEM_TO_TIMELINE=7002
@@ -899,13 +1128,16 @@ class Timeline():
 
         debug('Timeline: kwargs={}'.format(kwargs))
 
+        # Just a temporary dict which we can use for this and that.
+        self.temp={}
+        self.bottom_of_timelines=0
+        self.bottom_of_page=0
+
         self.root=kwargs['root']
         self.canvas=kwargs['canvas']
-        self.theme=theme.Theme()
 
+        self.theme=theme.Theme()
         self.theme.font_name="Courier"
-        
-        self.item_label_int=0
 
         self.root.protocol("WM_DELETE_WINDOW", self._close)
 
@@ -929,11 +1161,6 @@ class Timeline():
         else:
            self.default_item_type=None
 
-        if 'default_item_shape' in kwargs.keys():
-           self.default_item_type=kwargs['default_item_shape']
-        else:
-           self.default_item_shape='rectangle'
-
         self.x=0
         self.y=0
 
@@ -943,12 +1170,14 @@ class Timeline():
         self.thumbnails={}
         
         # Use object_id to return the key which was used to add the item (add_item).
-        self._map_object_id_to_item_key={}
+        # self._map_object_id_to_item_key={}
 
         if 'cbfunc' in kwargs.keys():
             self.do_callback=kwargs['cbfunc']
         else:
             self.do_callback=None
+
+        self._build_menus()
 
         self.canvas.focus_set()
 
@@ -959,82 +1188,68 @@ class Timeline():
         self.canvas.tag_bind("timelines", "<Double-1>",        self._timeline_mouse_doubleclick)
         self.canvas.bind_all("<MouseWheel>", self._timeline_mouse_wheel)
 
-        self.canvas.tag_bind("item", "<ButtonPress-1>",   self._item_mouse_down)
-        self.canvas.tag_bind("item", "<B1-Motion>",       self._item_mouse_drag)
-        self.canvas.tag_bind("item", "<Motion>",          self._item_mouse_over)
-        self.canvas.tag_bind("item", "<ButtonRelease-1>", self._item_mouse_up)
-        self.canvas.tag_bind("item", "<Double-1>",        self._item_mouse_doubleclick)
-        self.canvas.tag_bind("item", "<Button-3>",        self._show_item_menu)
+        self.canvas.tag_bind("BaseItem", "<ButtonPress-1>",   self._item_mouse_down)
+        self.canvas.tag_bind("BaseItem", "<B1-Motion>",       self._item_mouse_drag)
+        self.canvas.tag_bind("BaseItem", "<Motion>",          self._item_mouse_over)
+        self.canvas.tag_bind("BaseItem", "<ButtonRelease-1>", self._item_mouse_up)
+        self.canvas.tag_bind("BaseItem", "<Double-1>",        self._item_mouse_doubleclick)
+        self.canvas.tag_bind("BaseItem", "<Button-3>",        self._show_item_menu)
 
+        self.mouse=(0, 0)
+        
         self._f2_display_mode=0
         self.display_items=True
         self.display_hidden_items=False
         self.display_deleted_items=False
 
-        self.hourly=TimelineLane (name='hourly', type='hourly', y=self.y, height=self.height[0], total_days=8/24,
-                                  time=datetime.datetime.now(), label_format='%I%p')
-        self.daily=TimelineLane  (name='daily', type='daily', y=self.hourly.y+self.hourly.height, height=self.height[1], total_days=7,
-                                  time=datetime.datetime.now(), label_format='%d%a')
-        self.monthly=TimelineLane(name='monthly', type='monthly', y=self.daily.y+self.daily.height, height=self.height[2], total_days=180,
-                                  time=datetime.datetime.now(), label_format='%B %y')
+        # Reference to application root_path.
+        self.app_folder=bin.application_root_path()
 
-        if 'statusbox' in kwargs.keys():
-            self.statusbox=kwargs['statusbox']
-        else:
-            self.statusbox=statusbox.StatusBox(
+        # Where item objects are stored.
+        self.app_folder_for_items=os.path.join(self.app_folder, 'items')
+        bin.mkdir(self.app_folder_for_items)
+
+        # Where deleted item are stored.
+        self.default_deleted_items_path=os.path.join(self.app_folder, 'items', '_deleted_')
+        bin.mkdir(self.default_deleted_items_path)
+
+        # This is a dict of all of the items in the database, indexed by key.
+        self.items=Items(root_dir=self.app_folder_for_items, canvas=self.canvas, theme=self.theme)
+
+        self.load()
+
+        self.timelines=Timelines(canvas=self.canvas, theme=self.theme)
+        self.timelines.draw(0, 0, self.width)
+
+        self.last_timeline_clicked=None
+        
+        self._bottom_of_last_timeline=0
+
+        self.taskbar=taskbar.TaskBar(
+            root=self.root,
+            canvas=self.canvas,
+            keyboard=self.keyboard,
+            height=25,
+            x=0,
+            y=self.timelines.bottom
+        )
+
+        self.statusbox=statusbox.StatusBox(
             root=self.root,
             canvas=self.canvas,
             theme=self.theme,
             font_size='<',
             x=4,
-            y=self.monthly.y+self.monthly.height+4,
+            y=self.taskbar.bottom,
             height=16,
             width=self.width)
-            
-        self.timelines=(self.hourly, self.daily, self.monthly)
-
-        self.sync_timelines=True
-        #self._timelines_draw()
-
-        # Reference to application root_path.
-        self.root_path=bin.application_root_path()
-        
-        # Where item objects are stored.
-        self.root_path_for_items=os.path.join(self.root_path, 'items')
-        bin.mkdir(self.root_path_for_items)
-
-        # Where deleted item are stored.
-        self.default_deleted_items_path=os.path.join(self.root_path, 'items', '_deleted_')
-        bin.mkdir(self.default_deleted_items_path)
-
-        # This is a dict of all of the items in the database, indexed by key.
-        self.items=Items(root_dir=self.root_path_for_items)
-
-        self.patch()
-
-        self.mouse=(0, 0)
-
-        # Just a temporary dict which we can use for this and that.
-        self.temp={}
-
-        self._build_menus()
-
-        self._timeline_of_last_selected_item=None
-        self._total_items_selected=0
-        self._bottom_of_last_timeline=0
-
-        self.load()
-        
-        for t in self.timelines:
-            t.load()
 
         self._vertical_distance_between_items=None
         self._horizontal_distance_between_items=None
         
-        self._timelines_draw()
-
         self.draw_items()
 
+        self.patch()
 
     def add_tag_to_object(self, object_id, tag):
         """
@@ -1058,7 +1273,7 @@ class Timeline():
         if (more_days and timeline.total_days < timeline.max_days) or \
            (less_days and timeline.total_days > timeline.min_days):
             timeline.total_days+=factor*negative_or_positive
-            self._timelines_draw_details(timeline)
+            timeline.draw_details()
             self.draw_items()
 
     def get_next_background_color(self):
@@ -1076,11 +1291,11 @@ class Timeline():
         
         debug('Timeline._timeline_mouse_wheel')
 
-        object_id,item,timeline,time=self._get_xy(event.x, event.y)
+        object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
 
         if self.keyboard.f3_key_down:
             self.theme.background_color=self.get_next_background_color()
-            self._timelines_draw()
+            self.timelines.draw()
             return
 
         if object_id:
@@ -1105,11 +1320,17 @@ class Timeline():
             if self.keyboard.shift_key_down:
                 if event.keycode==120:
                     timeline.height+=15
-                    self._timelines_draw()
+                    self.timelines.draw()
+                    self.taskbar.y=self.timelines.bottom
+                    self.taskbar._draw_taskbar()
+                    self.statusbox.y=self.taskbar.bottom
                     self.draw_items()
                 elif event.keycode==-120:
                     timeline.height-=15
-                    self._timelines_draw()
+                    self.timelines.draw()
+                    self.taskbar.y=self.timelines.bottom
+                    self.taskbar._draw_taskbar()
+                    self.statusbox.y=self.taskbar.bottom
                     self.draw_items()
             else:
                 if event.keycode==120:
@@ -1131,13 +1352,13 @@ class Timeline():
         debug('Timeline.callback')
         cbkey=dict['cbkey']
         if cbkey==ItemForm.CLOSE_FORM:
-            self.unselect_all_items(redraw=True)
+            self.unselect_all_items(draw=True)
             self.draw_items()
             
     def _close(self):
         self.save()
         self.items.save()
-        for t in self.timelines:
+        for t in self.timelines.timelines:
             t.save()
             
         self.root.destroy()
@@ -1151,165 +1372,23 @@ class Timeline():
         else:
             self.statusbox.clear()
 
+    def draw(self):
+        self.timelines.draw(x=self.x, y=0, width=self.width)
+
     def draw_items(self):
         debug2('Timeline.draw_items')
-        self.canvas.delete('all_items')
-        self._map_object_id_to_item_key={}
-        # ToDo: Probably needs to be changed to an iterator.
-        for item in self.items.all_items():
-            self.draw_item(item, delete_first=False)
-
-    def timeline_draw_items(self, timeline):
-        debug('Timeline.timeline_draw_items')
-        for item in self.items.all_items():
-            self._timeline_draw_item(item)
-
-    def timeline_draw_item(self, timeline, item, delete_first=True):
-        debug('Timeline.timeline_draw_item')
-
-        # If this is a new item.
-        if not item.state:
-            item.y_as_pct_of_height=self._get_y_as_pct_of_height_from_xy(item.x, item.y)
-            if not item.size:
-                item.size=int(self.height[0]/10)
-            item.state='open'
-            item.save()
-
-        object_key="{0}_{1}".format(item.key, timeline.name)
-
-        if delete_first:
-            self.canvas.delete(object_key)
-
-        # Determine if we really need to draw this particular item.
-        tf=False
-        if self.display_deleted_items and item.deleted:
-            tf=True
-        elif self.display_hidden_items and item.hidden:
-            tf=True
-        elif self.display_items and (not item.hidden and not item.deleted and not item.purged):
-            tf=True
-        if item.purged:
-            return
-
-        if not tf:
-            return
-
-        label_tags=' '.join(['all_items', object_key])
-
-        if item.datetime >= timeline.begin_time and item.datetime <= timeline.end_time:
-
-            item_tags=' '.join(['all_items', 'item', 'drags', object_key, timeline.name])
-
-            size=item.size*{'hourly': 1, 'daily': .8, 'monthly': .8*.8}[timeline.name]
-
-            x=bin.days_between_two_dates(item.datetime, timeline.begin_time)/timeline.total_days*self.width
-            y=timeline.y+(timeline.height*item.y_as_pct_of_height)
-            item.y=y
-            
-            if item.selected and (self._timeline_of_last_selected_item.name==timeline.name):
-                item_borderwidth=2
-                item_outline='black'
-                item_dash=(1,2)
-                item_tags=item_tags + ' selected'
-            else:
-                item_borderwidth=1
-                item_outline='black'
-                item_dash=None
-            if item.shape=='rectangle' and not item.image_path:
-                item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill=item.color, outline=item_outline, tags=item_tags, stipple=None,
-                                                            width=item_borderwidth, dash=item_dash)
-            elif item.image_path:
-                thumb_key='{0}_{1}'.format(item.key, timeline.name)
-                # ToDo: Iterator here?
-                if thumb_key not in self.thumbnails.keys():
-                    thumbnail=bin.get_photoimage_thumbnail(item.image_path, border_color='black', border_size=1, size=size+10)
-                    self.thumbnails[thumb_key]=thumbnail
-                item.object_id=self.canvas.create_image(x, y, anchor=tk.NW, image=self.thumbnails[thumb_key], state=tk.NORMAL, tags=item_tags)
-
-            # Keep a reference so we can get a key using the object ID easily.
-            self._map_object_id_to_item_key[item.object_id]=item.key
-
-            # Draw labels for hourly timeline.
-            # ToDo: This is going to break for images.
-            if timeline.draw_labels:
-                x,y,right,bottom=self.canvas.coords(item.object_id)
-                object_id=self.canvas.create_text(right+5, y, text=item.get_label(self.item_label_int), font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
-
-    def draw_item(self, item, delete_first=True):
-        debug2('Timeline.draw_item')
-
-        # If this is a new item.
-        if not item.state:
-            item.y_as_pct_of_height=self._get_y_as_pct_of_height_from_xy(item.x, item.y)
-            if not item.size:
-                item.size=int(self.height[0]/10)
-            item.state='open'
-            item.save()
-
-        if delete_first:
-            self.canvas.delete(item.key)
-
-        # Determine if we really need to draw this particular item.
-        tf=False
-        if self.display_deleted_items and item.deleted:
-            tf=True
-        elif self.display_hidden_items and item.hidden:
-            tf=True
-        elif self.display_items and (not item.hidden and not item.deleted and not item.purged):
-            tf=True
-        if item.purged:
-            return
-
-        if not tf:
-            return
-
-        label_tags=' '.join(['all_items', item.key])
-            
-        for timeline in self.timelines:
-            # ToDo: Monkey Patch
-            if not item.datetime:
-                item.datetime=datetime.datetime.now()
-            # ToDo: Monkey Path
-            if not item.y_as_pct_of_height:
-                item.y_as_pct_of_height=self._get_y_as_pct_of_height_from_xy(item.x, item.y)
-
-            if item.datetime >= timeline.begin_time and item.datetime <= timeline.end_time:
-
-                item_tags=' '.join(['all_items', 'item', 'drags', item.key, timeline.name])
+        for timeline in self.timelines.timelines:
+            highlight_selected=False
+            if self.last_timeline_clicked is not None:
+                highlight_selected=self.last_timeline_clicked.name==timeline.name
+            for item in self.items.all_items():
+                x=self._get_x_from_time(item.datetime, timeline.begin_time, timeline.total_days, timeline.width)
+                y=timeline.y+(item.y_as_pct_of_height*timeline.height)
+                self.items.draw(item, x=x, y=y, tag='{0}_{1}'.format(timeline.name, item.key),
+                    draw_label=timeline.draw_labels, highlight_selected=highlight_selected)
                 
-                size=item.size*{'hourly': 1, 'daily': .8, 'monthly': .8*.8}[timeline.name]
-
-                x=bin.days_between_two_dates(item.datetime, timeline.begin_time)/timeline.total_days*self.width
-                #debug('item.y_as_pct_of_height={}'.format(item.y_as_pct_of_height))
-                y=timeline.y+(timeline.height*item.y_as_pct_of_height)
-                if item.selected and (self._timeline_of_last_selected_item.name==timeline.name):
-                    item_borderwidth=2
-                    item_outline='black'
-                    item_dash=(1,2)
-                    item_tags=item_tags + ' selected'
-                else:
-                    item_borderwidth=1
-                    item_outline='black'
-                    item_dash=None
-                if item.shape=='rectangle' and not item.image_path:
-                    item.object_id=self.canvas.create_rectangle(x, y, x+size, y+size, fill=item.color, outline=item_outline, tags=item_tags, stipple=None,
-                                                                width=item_borderwidth, dash=item_dash)
-                elif item.image_path:
-                    thumb_key='{0}_{1}'.format(item.key, timeline.name)
-                    # ToDo: Iterator here?
-                    if thumb_key not in self.thumbnails.keys():
-                        thumbnail=bin.get_photoimage_thumbnail(item.image_path, border_color='black', border_size=1, size=size+10)
-                        self.thumbnails[thumb_key]=thumbnail
-                    item.object_id=self.canvas.create_image(x, y, anchor=tk.NW, image=self.thumbnails[thumb_key], state=tk.NORMAL, tags=item_tags)
-                        
-                # Keep a reference so we can get a key using the object ID easily.
-                self._map_object_id_to_item_key[item.object_id]=item.key
-
-                # Draw labels for hourly timeline.
-                # ToDo: This is going to break for images.
-                if timeline.name=="hourly":
-                    x,y,right,bottom=self.canvas.coords(item.object_id)
-                    object_id=self.canvas.create_text(right+5, y-2, text=item.get_label(self.item_label_int), font=self.theme.font(size='<<'), fill="black", tags=label_tags, anchor="nw", justify="left")
+    def _item_is_on_timeline(self, item, timeline):
+        return item.datetime >= timeline.begin_time and item.datetime <= timeline.end_time
 
     def _delete_selected_items(self, redraw=False):
         debug("Timeline_delete_selected_items")
@@ -1317,7 +1396,7 @@ class Timeline():
             item.deleted=True
             if redraw:
                 self.draw_item(item, delete_first=True)
-        self.unselect_all_items(redraw=True)
+        self.unselect_all_items(draw=True)
             
     def dump(self, file_name):
         f=open(file_name, mode='w')
@@ -1346,7 +1425,7 @@ class Timeline():
 
     def _get_item_key_from_object_id(self, object_id):
         debug2('Timeline._get_item_key_from_object_id')
-        return self._map_object_id_to_item_key[object_id]
+        #return self._map_object_id_to_item_key[object_id]
 
     def _get_time_from_xy(self, x, y):
         debug2('Timeline._get_time_from_item')
@@ -1359,11 +1438,11 @@ class Timeline():
     def  _get_timeline_from_xy(self, x, y, off_screen_ok=False):
         debug2('Timeline._get_timeline_from_item: x={0} y={1}'.format(x, y))
         if off_screen_ok:
-            for t in self.timelines:
+            for t in self.timelines.timelines:
                 if y > t.y and y < t.bottom:
                     return t
         else:
-            for t in self.timelines:
+            for t in self.timelines.timelines:
                 if x > self.x and x < t.right and y > t.y and y < t.bottom:
                     return t
 
@@ -1384,14 +1463,14 @@ class Timeline():
             item.hidden=True
             item.selected=False
             self.draw_item(item, delete_first=True)
-        self.unselect_all_items(redraw=True)
+        self.unselect_all_items(draw=True)
 
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
 
     def _timelines_set_time(self, time):
-        if self.sync_timelines:
-            for t in self.timelines:
+        if self.timelines.sync_timelines:
+            for t in self.timelines.timelines:
                 t.time=time
 
     def keypress(self, dict):
@@ -1405,22 +1484,22 @@ class Timeline():
         # If left arrow...
         if dict['state']>1000 and dict['keycode']==37 and timeline:
             time=timeline.time+datetime.timedelta(days=move_days)
-            if self._total_items_selected > 1:
+            if self.items.total_selected > 1:
                 if self.keyboard.shift_key_down:
                     self._items_align('decrease_horizontal')
                 else:
                     self._items_align('left')
-            elif self.sync_timelines:
+            elif self.timelines.sync_timelines:
                 self._timelines_set_time(time)
-                self._timelines_draw()
+                self.timelines.draw()
                 self.draw_items()
             else:
                 timeline.time=time
-                self._timelines_draw()
+                self.timelines.draw()
                 self.draw_items()
         # If up arrow...
         elif dict['state']>1000 and dict['keycode']==38 and timeline:
-            if self._total_items_selected > 1:
+            if self.items.total_selected > 1:
                 if self.keyboard.shift_key_down:
                     self._items_align('decrease_vertical')
                 else:
@@ -1428,18 +1507,18 @@ class Timeline():
         # If right arrow...
         elif dict['state']>1000 and dict['keycode']==39 and timeline:
             time=timeline.time+datetime.timedelta(days=move_days)
-            if self._total_items_selected > 1:
+            if self.items.total_selected > 1:
                 if self.keyboard.shift_key_down:
                     self._items_align('increase_horizontal')
                 else:
                     self._items_align('right')
-            elif self.sync_timelines:
+            elif self.timelines.sync_timelines:
                 self._timelines_set_time(time)
-                self._timelines_draw()
+                self.timelines.draw()
                 self.draw_items()
             else:
                 timeline.time=time
-                self._timelines_draw()
+                self.timelines.draw()
                 self.draw_items()
         # If down arrow...
         elif dict['state']>1000 and dict['keycode']==40 and timeline:
@@ -1462,7 +1541,7 @@ class Timeline():
             self._keypress_f3()
         elif dict['state']==8 and dict['keycode']==76:
             # l Key
-            self.sync_timelines=not self.sync_timelines
+            self.timelines.sync_timelines=not self.timelines.sync_timelines
 
     def _keypress_delete(self):
         debug('Timeline._keypress_delete')
@@ -1471,15 +1550,13 @@ class Timeline():
         
     def _keypress_escape(self):
         debug('Timeline._keypress_escape')
-        self.unselect_all_items(redraw=True)
+        self.unselect_all_items(draw=True)
 
     def _keypress_f1(self):
-        self.item_label_int+=1
-        if self.item_label_int > 3:
-            self.item_label_int=0
-        # ToDo: To speed performance up here I cold just draw the hourly items.
+        debug('Timeline._keypress_f1')
+        self.items.switch_label_display_format()
         self.draw_items()
-        self.statusbox.text='Display Mode {}'.format(self.item_label_int)
+        #self.statusbox.text='Display Mode {}'.format(self.item_label_int)
         
     def _keypress_f2(self):
 
@@ -1513,7 +1590,7 @@ class Timeline():
     def _keypress_shift_delete(self):
         debug('Timeline._keypress_shift_delete')
         self._purge_selected_items(redraw=False)
-        self.unselect_all_items(redraw=True)
+        self.unselect_all_items(draw=True)
 
 
     def _get_item_from_object(self, object_id):
@@ -1529,15 +1606,16 @@ class Timeline():
         item=None
         timeline=None
         time=None
-        object_id=self._get_closest_object_id_from_xy_with_tag(x, y, 'item')
+        taskbar_group=self.taskbar.get_group_from_xy(x=x, y=y)
+        object_id=self._get_closest_object_id_from_xy_with_tag(x, y, 'BaseItem')
         if object_id:
-            item=self._get_item_from_object(object_id)
+            item=self.items.get_by_object_id(object_id)
             if use_object_coords:
                 x,y=self.canvas.coords(object_id)[0:2]
         timeline=self._get_timeline_from_xy(x, y)
         time=self._get_time_from_xy(x, y)
         debug2('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
-        return (object_id, item, timeline, time)
+        return (object_id, item, timeline, time, taskbar_group)
 
 
     def _items_align(self, direction):
@@ -1598,7 +1676,7 @@ class Timeline():
             # Get the y position of the first item as our starting point.
             y=top_of_first_item
             for item in items_sorted_from_top_down:
-                rollback=(y+item[1].size > self._timeline_of_last_selected_item.bottom)
+                rollback=(y+item[1].size > self.last_timeline_clicked.bottom)
                 pct_of_height=self._get_y_as_pct_of_height_from_xy(item[1].x, y)
                 rollback=pct_of_height is None or rollback
                 if rollback:
@@ -1630,7 +1708,7 @@ class Timeline():
 
             minutes_between_items=int(minutes_between_items*multiplier)
 
-           # Horizontal distance can't be less than 0.
+            # Horizontal distance can't be less than 0.
             if minutes_between_items <= 0:
                 minutes_between_items={'increase_horizontal': 5, 'decrease_horizontal': 0}[direction]
 
@@ -1643,52 +1721,50 @@ class Timeline():
         self.draw_items()
 
     def select_item(self, item, timeline, object_id):
-        item.selected=True
-        self._total_items_selected+=1
+        self.items.select(item)
         self.add_tag_to_object(object_id, 'selected')
-        self._timeline_of_last_selected_item=timeline
+        self.last_timeline_clicked=timeline
 
     def _item_mouse_down(self, event):
         debug('Timeline._item_mouse_down')
 
         # Will not need to re-draw on mouse down since this is always triggered by mouse up.
 
-        object_id,item,timeline,time=self._get_xy(event.x, event.y)
+        object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
 
         if not item:
+            debug('*** Did not click an item. ***')
             return
 
-        if self._total_items_selected > 0 and self._timeline_of_last_selected_item.name!=timeline.name:
-            self.unselect_all_items(redraw=False)
+        if self.items.total_selected > 0 and self.last_timeline_clicked.name!=timeline.name:
+            self.unselect_all_items(draw=False)
 
-        if self._total_items_selected==0:
+        if self.items.total_selected==0:
             self.select_item(item, timeline, object_id)
-        elif self._total_items_selected==1 and not self.keyboard.control_key_down:
+        elif self.items.total_selected==1 and not self.keyboard.control_key_down:
             if item.selected:
-                item.selected=False
-                self.unselect_all_items(redraw=False)
+                self.unselect_all_items(draw=False)
             else:
-                self.unselect_all_items(redraw=True)
+                self.unselect_all_items(draw=True)
                 self.select_item(item, timeline, object_id)
-        elif self._total_items_selected>=1 and self.keyboard.control_key_down:
+        elif self.items.total_selected>=1 and self.keyboard.control_key_down:
             if item.selected:
-                item.selected=False
-                self._total_items_selected-=1
+                self.items.unselect(item)
                 self.canvas.dtag(object_id, 'selected')
             else:
                 self.select_item(item, timeline, object_id)
-        elif self._total_items_selected > 1 and not self.keyboard.control_key_down and not item.selected:
-                self.unselect_all_items(redraw=True)
+        elif self.items.total_selected > 1 and not self.keyboard.control_key_down and not item.selected:
+                self.unselect_all_items(draw=True)
                 self.select_item(item, timeline, object_id)
 
-        if self._total_items_selected==0:
-            self._timeline_of_last_selected_item=None
+        if self.items.total_selected==0:
+            self.last_timeline_clicked=None
 
             # Shift-Delete should purge all selected items.
             # Space-bar should hide or unhide all selected items.
             # Space-bar should undelete all selected items.
             
-        if item.drags and not self.keyboard.control_key_down:
+        if not self.keyboard.control_key_down:
             self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self._dragging['all_coords']={}
@@ -1708,7 +1784,7 @@ class Timeline():
         self.mouse=(event.x, event.y)
 
         if not self._is_item_being_dragged():
-            object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
+            object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y, use_object_coords=True)
             if object_id:
                 text=None
                 if time and item:
@@ -1752,9 +1828,10 @@ class Timeline():
 
         self.mouse=(event.x, event.y)
 
-        object_id,item,timeline,time=self._get_xy(event.x, event.y, use_object_coords=True)
+        object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y, use_object_coords=True)
 
         if not item:
+            debug('*** Item not found. ***')
             return
 
         delta_x=0
@@ -1776,32 +1853,24 @@ class Timeline():
                     first_timeline=timeline.name
                 elif first_timeline != timeline.name:
                     abort_drag=True
-
             if not abort_drag:
                 for object_id in self.canvas.find_withtag('selected'):
                     x,y=self.canvas.coords(object_id)[0:2]
-                    key=self._get_item_key_from_object_id(object_id)
-                    item=self.items.get_by_key(key)
+                    item=self.items.get_by_object_id(object_id)
                     item.selected=False
                     timeline=self._get_timeline_from_xy(x,y, off_screen_ok=True)
                     item.datetime=self._get_time_from_xy(x,y)
-                    item.x=x
-                    item.y=y
                     item.y_as_pct_of_height=(y-timeline.y)/timeline.height
-                    del self._map_object_id_to_item_key[object_id]
-                    self.draw_item(item)
                     item.save()
-                    if self.do_callback and item.type != 'image':
-                        self.do_callback({'cbkey': self.DRAG_AND_DROP, 'item': item})
-                    debug('not abort drag: x={0} y={1}'.format(delta_x, delta_y))
-                    self.unselect_all_items(redraw=False)
+                self.draw_items()
+                self.unselect_all_items(draw=False)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
                 if self.do_callback:
                     # Add the x and y drop locations.
                     self.do_callback({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
         elif not self.keyboard.control_key_down:
-            self.unselect_all_items(redraw=False)
+            self.unselect_all_items(draw=False)
             self.select_item(item, timeline, object_id)
 
         self._dragging={}
@@ -1810,13 +1879,13 @@ class Timeline():
     
     def _item_mouse_doubleclick(self, event):
         debug('Timeline._item_mouse_doubleclick')
-        object_id,item,timeline,time=self._get_xy(event.x, event.y)
+        object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
         self.root.config(cursor='wait')
         self.root.update_idletasks()
         if item.type=='task':
-            self.unselect_all_items(redraw=True)
+            self.unselect_all_items(draw=True)
             if self.keyboard.shift_key_down:
-                bin.open_file_using_default_program(item.folder_path_raw())
+                bin.open_file_using_default_program(item.folder_with_escapes())
             else:
                 f=ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
         elif item.type=='remark':
@@ -1829,7 +1898,7 @@ class Timeline():
             root=self.root,
             canvas=self.canvas,
             text=text)
-            self.unselect_all_items(redraw=True)
+            self.unselect_all_items(draw=True)
             if f.text:
                 item.text=f.text
                 item.save()
@@ -1839,13 +1908,13 @@ class Timeline():
         elif item.type=='link':
             if self.keyboard.shift_key_down:
                 bin.open_file_using_default_program(item.title)
-                self.unselect_all_items(redraw=True)
+                self.unselect_all_items(draw=True)
             else:
                 f=modalinputbox.ModalInputBox(
                 root=self.root,
                 canvas=self.canvas,
                 text=item.text)
-                self.unselect_all_items(redraw=True)
+                self.unselect_all_items(draw=True)
                 if f.text:
                     item.text=f.text
                     item.save()
@@ -1899,16 +1968,17 @@ class Timeline():
         self.draw_item(item)
 
     def save(self):
-        dict={
-            'item_label_int':self.item_label_int,
-            'sync_timelines':self.sync_timelines
-        }
+        dict={}
         bin.save_database(name='timeline', dict=dict, folder_path=os.path.join(bin.application_root_path(), 'data'))
 
     def load(self):
+        """
+        Restore any saved settings.
+        """
         dict=bin.open_database(name='timeline', folder_path=os.path.join(bin.application_root_path(), 'data'))
-        self.item_label_int=dict['item_label_int']
-        self.sync_timelines=dict['sync_timelines']
+        if dict:
+            None
+            #self.item_label_int=dict['item_label_int']
 
     def _set_status_text_for_item(self):
         debug('Timeline._set_status_text_for_item')
@@ -1960,12 +2030,12 @@ class Timeline():
 
     def _timeline_disable_window(self):
         self.theme.enabled=False
-        self._timelines_draw()
+        self.timelines.draw()
         self.draw_items()
 
     def _timeline_enable_window(self):
         self.theme.enabled=True
-        self._timelines_draw()
+        self.timelines.draw()
         self.draw_items()
         self.canvas.focus_force()
 
@@ -1978,6 +2048,9 @@ class Timeline():
         if not timeline:
             return
 
+        y_pct=self._get_y_as_pct_of_height_from_xy(x, y)
+        t=self._get_time_from_xy(x, y)
+
         self._timeline_disable_window()
 
         form=modalinputbox.ModalInputBox(
@@ -1989,12 +2062,11 @@ class Timeline():
         if form.text:
             item_type=get_item_type_from_text(form.text)
             if item_type=='link':
-                new_item=Link(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+                new_item=Link(app_folder=self.app_folder, text=form.text, y_pct=y_pct, datetime=t)
             elif item_type=='remark':
-                new_item=Remark(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
+                new_item=Remark(app_folder=self.app_folder, text=form.text, y_pct=y_pct, datetime=t)
             elif item_type=='task':
-                new_item=Task(root_path=self.root_path_for_items, text=form.text, x=x, y=y, dt=self._get_time_from_xy(x, y))
-
+                new_item=Task(app_folder=self.app_folder, text=form.text, y_pct=y_pct, datetime=t)
             self.items.items[new_item.key]=new_item
             new_item.save()
             if self.do_callback:
@@ -2004,14 +2076,14 @@ class Timeline():
 
     def _timeline_mouse_doubleclick(self, event):
         debug2('Timeline._timeline_mouse_doubleclick')
-        object_id,item,timeline,time=self._get_xy(event.x, event.y)
-        if self.sync_timelines:
-            for t in self.timelines:
+        object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
+        if self.timelines.sync_timelines:
+            for t in self.timelines.timelines:
                 t.time=time
-                self._timelines_draw_details(t)
+                t.draw_details()
         else:
             timeline.time=time
-            self._timelines_draw_details(timeline)
+            timeline.draw_details()
 
         self.draw_items()
 
@@ -2054,12 +2126,12 @@ class Timeline():
                 days=x/self.width*t.total_days*-1
                 t.time=self._dragging['time']+datetime.timedelta(days=days)
                 self._display_time_with_text(t.time)
-                if self.sync_timelines:
-                    for timeline in self.timelines:
+                if self.timelines.sync_timelines:
+                    for timeline in self.timelines.timelines:
                        timeline.time=t.time
-                       self._timelines_draw_details(timeline)
+                       timeline.draw_details()
                 else:
-                    self._timelines_draw_details(t)
+                    timeline.draw_details()
 
                 self.draw_items()
 
@@ -2075,122 +2147,32 @@ class Timeline():
                 oids=self.canvas.find_enclosed(x, y, x1, y1)
                 for oid in oids:
                     debug('tags: {}'.format(self.canvas.gettags(oid)))
-                    if 'item' in self.canvas.gettags(oid):
-                        item=self._get_item_from_object(oid)
+                    if 'BaseItem' in self.canvas.gettags(oid):
+                        item=self.items.get_item_from_object_id(oid)
                         # ToDo: This item selected business is just ugly.
                         self.select_item(item, t, oid)
                 self.draw_items()
+            else:
+                debug('*** t.name != dragging timeline name ***')
         elif "timeline" in self._dragging.keys():
             x=event.x-self._dragging['x']
             if x==0:
                 # Items will stay selected if an actual timeline drag has taken place, but if not then all items will be unselected.
-                self.unselect_all_items(redraw=True)
+                self.unselect_all_items(draw=True)
         self._dragging={}
-
-    def _timelines_draw(self):
-        """
-        Draw the basic rectangle for each timeline and position the status box below the last rectangle.
-        """
-        debug2('Timeline._timelines_draw')
-        self.canvas.delete("timelines")
-        self.bottom_of_last_timeline=0
-        for t in self.timelines:
-            t.y=self.bottom_of_last_timeline
-            t.right=self.x+self.width
-            t.bottom=t.y+t.height
-            self.bottom_of_last_timeline=t.bottom
-            t.center_x=self.x+(self.width/2)
-            t.center_y=t.y+(t.height/2)
-            object_id=self.canvas.create_rectangle(self.x, t.y, t.right, t.bottom, fill=self.theme.background_color, outline=self.theme.line_color, tags="timelines")
-            self.canvas.tag_lower(object_id)
-            self._timelines_draw_details(t)
-
-        self.statusbox.y=self.bottom_of_last_timeline+4
-
-    def _timelines_draw_details(self, t):
-        """
-        Draw the lines and labels for the given timeline.
-        """
-        debug2('Timeline._timelines_draw_details')
-
-        self.canvas.delete(t.key)
-        
-        font_size='<<'
-
-        # Get the X position of the first label.
-        x=self._get_x_from_time(t.first_label, t.begin_time, t.total_days, self.width)
-        label_time=t.first_label
-        for i in range(1,100):
-            l=bin.to_char(label_time, t.label_format)
-            self.canvas.create_line(x, t.y, x, t.bottom, fill=self.theme.line_color, tags=t.key)
-            self.canvas.create_text(x+3,t.bottom-8, font=self.theme.font(size=font_size), text=l, anchor='w', fill=self.theme.font_color, tags=t.key)
-            if t.type=='hourly':
-                label_time=label_time+datetime.timedelta(hours=1)
-                if t.total_days <= 12/24:
-                    for i in range(1,4):
-                        minute_time=label_time+datetime.timedelta(days=i*15/1440)
-                        x=self._get_x_from_time(minute_time, t.begin_time, t.total_days, self.width)
-                        self.canvas.create_line(x, t.y, x, t.bottom, fill='light gray', tags=t.key)
-                        self.canvas.create_text(x+3,t.y+8, font=self.theme.font(size=font_size), text=str(i*15), anchor='w', fill='light gray', tags=t.key)
-            elif t.type=='daily':
-                if t.total_days <= 3:
-                    for i in range(1,24):
-                        hourly_time=label_time+datetime.timedelta(hours=i)
-                        x=self._get_x_from_time(hourly_time, t.begin_time, t.total_days, self.width)
-                        self.canvas.create_line(x, t.y, x, t.bottom, fill='light gray', tags=t.key)
-                        self.canvas.create_text(x+3,t.y+8, font=self.theme.font(size=font_size), text=str(i), anchor='w', fill='light gray', tags=t.key)
-                label_time=label_time+datetime.timedelta(hours=24)
-            elif t.type=='monthly':
-                if t.total_days <= 60:
-                    for i in range(1,bin.get_number_of_days_in_month_from_datetime(label_time)):
-                        daily_time=label_time+datetime.timedelta(hours=i*24)
-                        x=self._get_x_from_time(daily_time, t.begin_time, t.total_days, self.width)
-                        self.canvas.create_line(x, t.y, x, t.bottom, fill='light gray', tags=t.key)
-                        self.canvas.create_text(x+3,t.y+8, font=self.theme.font(size=font_size), text=str(i+1), anchor='w', fill='light gray', tags=t.key)
-                label_time=self._get_next_month(label_time)
-
-            x=self._get_x_from_time(label_time, t.begin_time, t.total_days, self.width)
-
-            if label_time > t.begin_time+datetime.timedelta(days=t.total_days):
-                break
-
-        # Draw red line in middle of timeline.
-        #if self.sync_timelines:
-        x=self._get_x_from_time(t.time, t.begin_time, t.total_days, self.width)
-        self.canvas.create_line(x, t.y, x, t.y+t.height, fill='red', tags=t.key)
-
-        # Draw blue line at current time.
-        #tag="blue_line"
-        #self.canvas.delete(tag)
-        #x=self._get_x_from_time(datetime.datetime.now(), t.begin_time, t.total_days, self.width)
-        #self.canvas.create_line(x, t.y, x, t.y+t.height, fill='blue', tags=tag)
-        self._draw_current_time()
-
-    def _draw_current_time(self):
-        self.canvas.delete('blue_line')
-        for t in self.timelines:
-            # Draw blue line at current time.
-            x=self._get_x_from_time(datetime.datetime.now(), t.begin_time, t.total_days, self.width)
-            self.canvas.create_line(x, t.y, x, t.y+t.height, fill='blue', tags='blue_line')
 
     def update_background_tasks(self):
         debug('Timeline.update_background_tasks')
-        self._draw_current_time()
+        for t in self.timelines.timelines:
+            t._draw_current_time()
 
-    def unselect_all_items(self, redraw=False):
+    def unselect_all_items(self, draw=True):
         debug('Timeline.unselect_all_items')
 
         # Remove selected tag from all items.
         for object_id in self.canvas.gettags('selected'):
             self.canvas.dtag(object_id, 'selected')
 
-        # Set selected attribute to false for all items.
-        for item in self.items.all_items():
-            if item.selected:
-                item.selected=None
-                if redraw:
-                    self.draw_item(item, delete_first=True)
-
-        self._total_items_selected=0
+        self.items.unselect_all(draw=draw)
 
         self._vertical_distance_between_items=None
