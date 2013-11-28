@@ -1086,26 +1086,61 @@ class Items():
                
         self.total_selected=0
 
-class Timelines():
-    def __init__(self,  canvas, theme):
-        self.sync_timelines=True
-        self.timelines=[]
+class Timeline():
 
-        self.hourly=TimelineLane(name='hourly', theme=theme, type='hourly', y=0, height=100, total_days=8/24,
-            time=datetime.datetime.now(), label_format='%I%p', canvas=canvas, draw_labels=True)
-        self.hourly.load()
-        self.daily=TimelineLane(name='daily', theme=theme, type='daily', y=100, height=85,
-            total_days=7, time=datetime.datetime.now(), label_format='%d%a', canvas=canvas)
-        self.daily.load()
-        self.monthly=TimelineLane(name='monthly', theme=theme, type='monthly', y=185, height=70,
-            total_days=180, time=datetime.datetime.now(), label_format='%B %y', canvas=canvas)
-        self.monthly.load()
-        self.bottom=185+70
-        self.timelines.append(self.hourly)
-        self.timelines.append(self.daily)
-        self.timelines.append(self.monthly)
+    def __init__(self, root, canvas, theme, **kwargs):
+        self.root=root
+        self.canvas=canvas
+        self.theme=theme
+        self.timelines=[]
+        self.bottom=0
+        self.sync_timelines=True
+        # Just a temporary dict which we can use for this and that.
+        self.temp={}
+        self.root.protocol("WM_DELETE_WINDOW", self._close)
+        self.keyboard=keyboard.Keyboard(canvas=self.canvas, cbfunc=(lambda dict: self.keypress(dict)))
+        self.x=0
+        self.y=0
+        # Stores information during drag and drop operations.
+        self._dragging={}
+        self.mouse=(0, 0)
+        self._f2_display_mode=0
+        self.display_items=True
+        self.display_hidden_items=False
+        self.display_deleted_items=False
+        
+        # Reference to application root_path.
+        self.app_folder=bin.application_root_path()
+
+        # Where item objects are stored.
+        self.app_folder_for_items=os.path.join(self.app_folder, 'items')
+        bin.mkdir(self.app_folder_for_items)
+
+        # Where deleted item are stored.
+        self.default_deleted_items_path=os.path.join(self.app_folder, 'items', '_deleted_')
+        bin.mkdir(self.default_deleted_items_path)
+
+        # This is a dict of all of the items in the database, indexed by key.
+        self.items=Items(root_dir=self.app_folder_for_items, canvas=self.canvas, theme=self.theme)
+
+        self.last_timeline_clicked=None
+
+    def add (self, name, type, y, height, total_days, time, label_format, draw_labels):
+        timeline=TimelineLane(name=name, theme=self.theme, type=type, y=y, height=height,
+            total_days=total_days, time=time, label_format=label_format, canvas=self.canvas, draw_labels=draw_labels)
+        timeline.load()
+        self.timelines.append(timeline)
+        self.bottom=timeline.bottom
+        self.thumbnails={}
+        self._build_menus()
+        self._vertical_distance_between_items=None
+        self._horizontal_distance_between_items=None
 
     def draw(self, x=None, y=None, width=None):
+        if x is None:
+            x=self.x
+        if width is None:
+            width=self.width
         if y is None:
             _y=0
         else:
@@ -1114,71 +1149,9 @@ class Timelines():
             timeline.draw(x=x, y=_y, width=width)
             _y=timeline.bottom
         self.bottom=_y
-
-class Timeline():
-
-    # Callback identifiers.s
-    DRAG_AND_DROP=7000
-    CANCEL_DRAG_AND_DROP=7001
-    ADD_ITEM_TO_TIMELINE=7002
-    OPEN_TASK_FROM_TIMELINE=7003
-    DELETE_ITEM_FROM_TIMELINE=7004
-      
-    def __init__(self, *args, **kwargs):
-
-        debug('Timeline: kwargs={}'.format(kwargs))
-
-        # Just a temporary dict which we can use for this and that.
-        self.temp={}
-        self.bottom_of_timelines=0
-        self.bottom_of_page=0
-
-        self.root=kwargs['root']
-        self.canvas=kwargs['canvas']
-
-        self.theme=theme.Theme()
-        self.theme.font_name="Courier"
-
-        self.root.protocol("WM_DELETE_WINDOW", self._close)
-
-        if 'keyboard' in kwargs.keys():
-            self.keyboard=kwargs['keyboard']
-        else:
-            self.keyboard=keyboard.Keyboard(canvas=self.canvas, cbfunc=(lambda dict: self.keypress(dict)))
-
-        if 'width' in kwargs.keys():
-            self.width=kwargs['width']
-        else:
-            self.width=self.canvas.winfo_reqwidth()
-            
-        if 'height' in kwargs.keys():
-            self.height=kwargs['height']
-        else:
-            self.height=(100,90,80)
-
-        if 'default_item_type' in kwargs.keys():
-           self.default_item_type=kwargs['default_item_type']
-        else:
-           self.default_item_type=None
-
-        self.x=0
-        self.y=0
-
-        # Stores information during drag and drop operations.
-        self._dragging={}
-
-        self.thumbnails={}
         
-        # Use object_id to return the key which was used to add the item (add_item).
-        # self._map_object_id_to_item_key={}
-
-        if 'cbfunc' in kwargs.keys():
-            self.do_callback=kwargs['cbfunc']
-        else:
-            self.do_callback=None
-
-        self._build_menus()
-
+    def init(self):
+        self.width=self.canvas.winfo_reqwidth()
         self.canvas.focus_set()
 
         self.canvas.tag_bind("timelines", "<ButtonPress-1>",   self._timeline_mouse_down)
@@ -1195,35 +1168,9 @@ class Timeline():
         self.canvas.tag_bind("BaseItem", "<Double-1>",        self._item_mouse_doubleclick)
         self.canvas.tag_bind("BaseItem", "<Button-3>",        self._show_item_menu)
 
-        self.mouse=(0, 0)
-        
-        self._f2_display_mode=0
-        self.display_items=True
-        self.display_hidden_items=False
-        self.display_deleted_items=False
-
-        # Reference to application root_path.
-        self.app_folder=bin.application_root_path()
-
-        # Where item objects are stored.
-        self.app_folder_for_items=os.path.join(self.app_folder, 'items')
-        bin.mkdir(self.app_folder_for_items)
-
-        # Where deleted item are stored.
-        self.default_deleted_items_path=os.path.join(self.app_folder, 'items', '_deleted_')
-        bin.mkdir(self.default_deleted_items_path)
-
-        # This is a dict of all of the items in the database, indexed by key.
-        self.items=Items(root_dir=self.app_folder_for_items, canvas=self.canvas, theme=self.theme)
-
         self.load()
 
-        self.timelines=Timelines(canvas=self.canvas, theme=self.theme)
-        self.timelines.draw(0, 0, self.width)
-
-        self.last_timeline_clicked=None
-        
-        self._bottom_of_last_timeline=0
+        self.draw(0, 0, self.width)
 
         self.taskbar=taskbar.TaskBar(
             root=self.root,
@@ -1231,7 +1178,7 @@ class Timeline():
             keyboard=self.keyboard,
             height=25,
             x=0,
-            y=self.timelines.bottom
+            y=self.bottom
         )
 
         self.statusbox=statusbox.StatusBox(
@@ -1243,9 +1190,6 @@ class Timeline():
             y=self.taskbar.bottom,
             height=16,
             width=self.width)
-
-        self._vertical_distance_between_items=None
-        self._horizontal_distance_between_items=None
         
         self.draw_items()
 
@@ -1295,7 +1239,7 @@ class Timeline():
 
         if self.keyboard.f3_key_down:
             self.theme.background_color=self.get_next_background_color()
-            self.timelines.draw()
+            self.draw()
             return
 
         if object_id:
@@ -1320,15 +1264,15 @@ class Timeline():
             if self.keyboard.shift_key_down:
                 if event.keycode==120:
                     timeline.height+=15
-                    self.timelines.draw()
-                    self.taskbar.y=self.timelines.bottom
+                    self.draw()
+                    self.taskbar.y=self.bottom
                     self.taskbar._draw_taskbar()
                     self.statusbox.y=self.taskbar.bottom
                     self.draw_items()
                 elif event.keycode==-120:
                     timeline.height-=15
-                    self.timelines.draw()
-                    self.taskbar.y=self.timelines.bottom
+                    self.draw()
+                    self.taskbar.y=self.bottom
                     self.taskbar._draw_taskbar()
                     self.statusbox.y=self.taskbar.bottom
                     self.draw_items()
@@ -1358,7 +1302,7 @@ class Timeline():
     def _close(self):
         self.save()
         self.items.save()
-        for t in self.timelines.timelines:
+        for t in self.timelines:
             t.save()
             
         self.root.destroy()
@@ -1372,12 +1316,9 @@ class Timeline():
         else:
             self.statusbox.clear()
 
-    def draw(self):
-        self.timelines.draw(x=self.x, y=0, width=self.width)
-
     def draw_items(self):
         debug2('Timeline.draw_items')
-        for timeline in self.timelines.timelines:
+        for timeline in self.timelines:
             highlight_selected=False
             if self.last_timeline_clicked is not None:
                 highlight_selected=self.last_timeline_clicked.name==timeline.name
@@ -1438,11 +1379,11 @@ class Timeline():
     def  _get_timeline_from_xy(self, x, y, off_screen_ok=False):
         debug2('Timeline._get_timeline_from_item: x={0} y={1}'.format(x, y))
         if off_screen_ok:
-            for t in self.timelines.timelines:
+            for t in self.timelines:
                 if y > t.y and y < t.bottom:
                     return t
         else:
-            for t in self.timelines.timelines:
+            for t in self.timelines:
                 if x > self.x and x < t.right and y > t.y and y < t.bottom:
                     return t
 
@@ -1469,8 +1410,8 @@ class Timeline():
         return 'object_id' in self._dragging
 
     def _timelines_set_time(self, time):
-        if self.timelines.sync_timelines:
-            for t in self.timelines.timelines:
+        if self.sync_timelines:
+            for t in self.timelines:
                 t.time=time
 
     def keypress(self, dict):
@@ -1489,13 +1430,13 @@ class Timeline():
                     self._items_align('decrease_horizontal')
                 else:
                     self._items_align('left')
-            elif self.timelines.sync_timelines:
+            elif self.sync_timelines:
                 self._timelines_set_time(time)
-                self.timelines.draw()
+                self.draw()
                 self.draw_items()
             else:
                 timeline.time=time
-                self.timelines.draw()
+                self.draw()
                 self.draw_items()
         # If up arrow...
         elif dict['state']>1000 and dict['keycode']==38 and timeline:
@@ -1512,13 +1453,13 @@ class Timeline():
                     self._items_align('increase_horizontal')
                 else:
                     self._items_align('right')
-            elif self.timelines.sync_timelines:
+            elif self.sync_timelines:
                 self._timelines_set_time(time)
-                self.timelines.draw()
+                self.draw()
                 self.draw_items()
             else:
                 timeline.time=time
-                self.timelines.draw()
+                self.draw()
                 self.draw_items()
         # If down arrow...
         elif dict['state']>1000 and dict['keycode']==40 and timeline:
@@ -1541,7 +1482,7 @@ class Timeline():
             self._keypress_f3()
         elif dict['state']==8 and dict['keycode']==76:
             # l Key
-            self.timelines.sync_timelines=not self.timelines.sync_timelines
+            self.sync_timelines=not self.sync_timelines
 
     def _keypress_delete(self):
         debug('Timeline._keypress_delete')
@@ -1866,9 +1807,6 @@ class Timeline():
                 self.unselect_all_items(draw=False)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
-                if self.do_callback:
-                    # Add the x and y drop locations.
-                    self.do_callback({'cbkey': self.CANCEL_DRAG_AND_DROP, 'item': item, 'x':x, 'y':y})
         elif not self.keyboard.control_key_down:
             self.unselect_all_items(draw=False)
             self.select_item(item, timeline, object_id)
@@ -2030,12 +1968,12 @@ class Timeline():
 
     def _timeline_disable_window(self):
         self.theme.enabled=False
-        self.timelines.draw()
+        self.draw()
         self.draw_items()
 
     def _timeline_enable_window(self):
         self.theme.enabled=True
-        self.timelines.draw()
+        self.draw()
         self.draw_items()
         self.canvas.focus_force()
 
@@ -2069,16 +2007,14 @@ class Timeline():
                 new_item=Task(app_folder=self.app_folder, text=form.text, y_pct=y_pct, datetime=t)
             self.items.items[new_item.key]=new_item
             new_item.save()
-            if self.do_callback:
-                self.do_callback({'cbkey': self.ADD_ITEM_TO_TIMELINE, 'item': self.items.get_by_key(new_item.key)})
 
         self._timeline_enable_window()
 
     def _timeline_mouse_doubleclick(self, event):
         debug2('Timeline._timeline_mouse_doubleclick')
         object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
-        if self.timelines.sync_timelines:
-            for t in self.timelines.timelines:
+        if self.sync_timelines:
+            for t in self.timelines:
                 t.time=time
                 t.draw_details()
         else:
@@ -2126,8 +2062,8 @@ class Timeline():
                 days=x/self.width*t.total_days*-1
                 t.time=self._dragging['time']+datetime.timedelta(days=days)
                 self._display_time_with_text(t.time)
-                if self.timelines.sync_timelines:
-                    for timeline in self.timelines.timelines:
+                if self.sync_timelines:
+                    for timeline in self.timelines:
                        timeline.time=t.time
                        timeline.draw_details()
                 else:
@@ -2163,7 +2099,7 @@ class Timeline():
 
     def update_background_tasks(self):
         debug('Timeline.update_background_tasks')
-        for t in self.timelines.timelines:
+        for t in self.timelines:
             t._draw_current_time()
 
     def unselect_all_items(self, draw=True):

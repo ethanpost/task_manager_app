@@ -1,37 +1,43 @@
 
 import tkinter as tk
-from datetime import *
 from debug import debug as debug, critical as error
 # from debug import dump as dump_debug
 import timeline
-
+import theme
+import datetime
 
 class App(tk.Tk):
     def __init__(self, *args, **kwargs):
         tk.Tk.__init__(self, *args, **kwargs)
 
         self.wm_title('task_manager_app')
+
         self.version=0
 
-        timeline_height=(100,85,70)
-        statusbox_height=25
-        canvas_height=sum(timeline_height)+statusbox_height
-
-        self.geometry('950x{}+100+100'.format(canvas_height))
-
-        self.canvas=tk.Canvas(self, background="white", bd=0, height=canvas_height, width=950, highlightthickness=0)
+        self.canvas=tk.Canvas(self, background="white", bd=0, height=600, width=950, highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=False)
+        
+        self.theme=theme.Theme()
+        self.theme.font_name="Courier"
 
-        self.timeline=timeline.Timeline(
-            root=self,
-            canvas=self.canvas,
-            default_item_type='task',
-            height=timeline_height
-        )
+        self.timeline=timeline.Timeline(root=self, canvas=self.canvas, theme=self.theme)
 
-        self.timeline.dump(file_name='C:\\temp\\dump.txt')
+        self.timeline.add(name='hourly', type='hourly', y=0, height=100, total_days=8/24, time=datetime.datetime.now(),
+            label_format='%I%p', draw_labels=True)
+
+        self.timeline.add(name='daily', type='daily', y=100, height=85, total_days=7, time=datetime.datetime.now(),
+            label_format='%d%a', draw_labels=False)
+
+        self.timeline.add(name='monthly', type='monthly', y=185, height=75, total_days=180, time=datetime.datetime.now(),
+            label_format='%B %y', draw_labels=False)
+
+        self.geometry('950x285+100+100')
+        
+        # self.timeline.dump(file_name='C:\\temp\\dump.txt')
 
         self.bind('<Configure>', self.configure_event)
+
+        self.timeline.init()
 
     def cbfunc(self, dict):
         debug('cbfunc: {}'.format(dict))

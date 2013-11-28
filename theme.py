@@ -2,7 +2,6 @@
 from debug import *
 
 class Theme():
-
     def __init__(self, name='default'):
         self.font_name=None
         self.font_size=None
