@@ -15,88 +15,6 @@ import datetime
 import theme
 import copy
 
-COLORS=['red', 'yellow']
-
-XCOLORS=['red', 'orange', 'yellow', 'aquamarine2', 'lime green', 'lawn green', 'light sea green',
-            'green yellow', 'light sky blue', 'white', 'SlateBlue1']
-
-BACKGROUND_COLORS=['snow', 'ghost white', 'white smoke', 'gainsboro', 'floral white', 'old lace',
-    'linen', 'antique white', 'papaya whip', 'blanched almond', 'bisque', 'peach puff',
-    'navajo white', 'lemon chiffon', 'mint cream', 'azure', 'alice blue', 'lavender',
-    'lavender blush', 'misty rose', 'dark slate gray', 'dim gray', 'slate gray',
-    'light slate gray', 'gray', 'light grey', 'midnight blue', 'navy', 'cornflower blue', 'dark slate blue',
-    'slate blue', 'medium slate blue', 'light slate blue', 'medium blue', 'royal blue',  'blue',
-    'dodger blue', 'deep sky blue', 'sky blue', 'light sky blue', 'steel blue', 'light steel blue',
-    'light blue', 'powder blue', 'pale turquoise', 'dark turquoise', 'medium turquoise', 'turquoise',
-    'cyan', 'light cyan', 'cadet blue', 'medium aquamarine', 'aquamarine', 'dark green', 'dark olive green',
-    'dark sea green', 'sea green', 'medium sea green', 'light sea green', 'pale green', 'spring green',
-    'lawn green', 'medium spring green', 'green yellow', 'lime green', 'yellow green',
-    'forest green', 'olive drab', 'dark khaki', 'khaki', 'pale goldenrod', 'light goldenrod yellow',
-    'light yellow', 'yellow', 'gold', 'light goldenrod', 'goldenrod', 'dark goldenrod', 'rosy brown',
-    'indian red', 'saddle brown', 'sandy brown',
-    'dark salmon', 'salmon', 'light salmon', 'orange', 'dark orange',
-    'coral', 'light coral', 'tomato', 'orange red', 'red', 'hot pink', 'deep pink', 'pink', 'light pink',
-    'pale violet red', 'maroon', 'medium violet red', 'violet red',
-    'medium orchid', 'dark orchid', 'dark violet', 'blue violet', 'purple', 'medium purple',
-    'thistle', 'snow2', 'snow3',
-    'snow4', 'seashell2', 'seashell3', 'seashell4', 'AntiqueWhite1', 'AntiqueWhite2',
-    'AntiqueWhite3', 'AntiqueWhite4', 'bisque2', 'bisque3', 'bisque4', 'PeachPuff2',
-    'PeachPuff3', 'PeachPuff4', 'NavajoWhite2', 'NavajoWhite3', 'NavajoWhite4',
-    'LemonChiffon2', 'LemonChiffon3', 'LemonChiffon4', 'cornsilk2', 'cornsilk3',
-    'cornsilk4', 'ivory2', 'ivory3', 'ivory4', 'honeydew2', 'honeydew3', 'honeydew4',
-    'LavenderBlush2', 'LavenderBlush3', 'LavenderBlush4', 'MistyRose2', 'MistyRose3',
-    'MistyRose4', 'azure2', 'azure3', 'azure4', 'SlateBlue1', 'SlateBlue2', 'SlateBlue3',
-    'SlateBlue4', 'RoyalBlue1', 'RoyalBlue2', 'RoyalBlue3', 'RoyalBlue4', 'blue2', 'blue4',
-    'DodgerBlue2', 'DodgerBlue3', 'DodgerBlue4', 'SteelBlue1', 'SteelBlue2',
-    'SteelBlue3', 'SteelBlue4', 'DeepSkyBlue2', 'DeepSkyBlue3', 'DeepSkyBlue4',
-    'SkyBlue1', 'SkyBlue2', 'SkyBlue3', 'SkyBlue4', 'LightSkyBlue1', 'LightSkyBlue2',
-    'LightSkyBlue3', 'LightSkyBlue4', 'SlateGray1', 'SlateGray2', 'SlateGray3',
-    'SlateGray4', 'LightSteelBlue1', 'LightSteelBlue2', 'LightSteelBlue3',
-    'LightSteelBlue4', 'LightBlue1', 'LightBlue2', 'LightBlue3', 'LightBlue4',
-    'LightCyan2', 'LightCyan3', 'LightCyan4', 'PaleTurquoise1', 'PaleTurquoise2',
-    'PaleTurquoise3', 'PaleTurquoise4', 'CadetBlue1', 'CadetBlue2', 'CadetBlue3',
-    'CadetBlue4', 'turquoise1', 'turquoise2', 'turquoise3', 'turquoise4', 'cyan2', 'cyan3',
-    'cyan4', 'DarkSlateGray1', 'DarkSlateGray2', 'DarkSlateGray3', 'DarkSlateGray4',
-    'aquamarine2', 'aquamarine4', 'DarkSeaGreen1', 'DarkSeaGreen2', 'DarkSeaGreen3',
-    'DarkSeaGreen4', 'SeaGreen1', 'SeaGreen2', 'SeaGreen3', 'PaleGreen1', 'PaleGreen2',
-    'PaleGreen3', 'PaleGreen4', 'SpringGreen2', 'SpringGreen3', 'SpringGreen4',
-    'green2', 'green3', 'green4', 'chartreuse2', 'chartreuse3', 'chartreuse4',
-    'OliveDrab1', 'OliveDrab2', 'OliveDrab4', 'DarkOliveGreen1', 'DarkOliveGreen2',
-    'DarkOliveGreen3', 'DarkOliveGreen4', 'khaki1', 'khaki2', 'khaki3', 'khaki4',
-    'LightGoldenrod1', 'LightGoldenrod2', 'LightGoldenrod3', 'LightGoldenrod4',
-    'LightYellow2', 'LightYellow3', 'LightYellow4', 'yellow2', 'yellow3', 'yellow4',
-    'gold2', 'gold3', 'gold4', 'goldenrod1', 'goldenrod2', 'goldenrod3', 'goldenrod4',
-    'DarkGoldenrod1', 'DarkGoldenrod2', 'DarkGoldenrod3', 'DarkGoldenrod4',
-    'RosyBrown1', 'RosyBrown2', 'RosyBrown3', 'RosyBrown4', 'IndianRed1', 'IndianRed2',
-    'IndianRed3', 'IndianRed4', 'sienna1', 'sienna2', 'sienna3', 'sienna4', 'burlywood1',
-    'burlywood2', 'burlywood3', 'burlywood4', 'wheat1', 'wheat2', 'wheat3', 'wheat4', 'tan1',
-    'tan2', 'tan4', 'chocolate1', 'chocolate2', 'chocolate3', 'firebrick1', 'firebrick2',
-    'firebrick3', 'firebrick4', 'brown1', 'brown2', 'brown3', 'brown4', 'salmon1', 'salmon2',
-    'salmon3', 'salmon4', 'LightSalmon2', 'LightSalmon3', 'LightSalmon4', 'orange2',
-    'orange3', 'orange4', 'DarkOrange1', 'DarkOrange2', 'DarkOrange3', 'DarkOrange4',
-    'coral1', 'coral2', 'coral3', 'coral4', 'tomato2', 'tomato3', 'tomato4', 'OrangeRed2',
-    'OrangeRed3', 'OrangeRed4', 'red2', 'red3', 'red4', 'DeepPink2', 'DeepPink3', 'DeepPink4',
-    'HotPink1', 'HotPink2', 'HotPink3', 'HotPink4', 'pink1', 'pink2', 'pink3', 'pink4',
-    'LightPink1', 'LightPink2', 'LightPink3', 'LightPink4', 'PaleVioletRed1',
-    'PaleVioletRed2', 'PaleVioletRed3', 'PaleVioletRed4', 'maroon1', 'maroon2',
-    'maroon3', 'maroon4', 'VioletRed1', 'VioletRed2', 'VioletRed3', 'VioletRed4',
-    'magenta2', 'magenta3', 'magenta4', 'orchid1', 'orchid2', 'orchid3', 'orchid4', 'plum1',
-    'plum2', 'plum3', 'plum4', 'MediumOrchid1', 'MediumOrchid2', 'MediumOrchid3',
-    'MediumOrchid4', 'DarkOrchid1', 'DarkOrchid2', 'DarkOrchid3', 'DarkOrchid4',
-    'purple1', 'purple2', 'purple3', 'purple4', 'MediumPurple1', 'MediumPurple2',
-    'MediumPurple3', 'MediumPurple4', 'thistle1', 'thistle2', 'thistle3', 'thistle4',
-    'gray1', 'gray2', 'gray3', 'gray4', 'gray5', 'gray6', 'gray7', 'gray8', 'gray9', 'gray10',
-    'gray11', 'gray12', 'gray13', 'gray14', 'gray15', 'gray16', 'gray17', 'gray18', 'gray19',
-    'gray20', 'gray21', 'gray22', 'gray23', 'gray24', 'gray25', 'gray26', 'gray27', 'gray28',
-    'gray29', 'gray30', 'gray31', 'gray32', 'gray33', 'gray34', 'gray35', 'gray36', 'gray37',
-    'gray38', 'gray39', 'gray40', 'gray42', 'gray43', 'gray44', 'gray45', 'gray46', 'gray47',
-    'gray48', 'gray49', 'gray50', 'gray51', 'gray52', 'gray53', 'gray54', 'gray55', 'gray56',
-    'gray57', 'gray58', 'gray59', 'gray60', 'gray61', 'gray62', 'gray63', 'gray64', 'gray65',
-    'gray66', 'gray67', 'gray68', 'gray69', 'gray70', 'gray71', 'gray72', 'gray73', 'gray74',
-    'gray75', 'gray76', 'gray77', 'gray78', 'gray79', 'gray80', 'gray81', 'gray82', 'gray83',
-    'gray84', 'gray85', 'gray86', 'gray87', 'gray88', 'gray89', 'gray90', 'gray91', 'gray92',
-    'gray93', 'gray94', 'gray95', 'gray97', 'gray98', 'gray99']
-
 def get_item_type_from_text(text):
     """
     Return the item type by parsing the input string.
@@ -639,7 +557,7 @@ class BaseItem():
             debug('Drawing label')
             x,y,right,bottom=canvas.coords(object_id)
             canvas.create_text(right+5, y-2, text=self.get_label(),
-                font=theme.font(size='<<'), fill="black", tags=tag, anchor="nw", justify="left")
+                font=theme.font(size='<<'), fill="black", tags=tags, anchor="nw", justify="left")
 
         return object_id
 
@@ -969,6 +887,7 @@ class Task(BaseItem):
 class Items():
 
     label_display_formats=['none', 'title', 'tag@title', 'status']
+    display_groups=['default', 'hidden', 'deleted']
 
     def __init__(self, root_dir, canvas, theme):
 
@@ -979,6 +898,7 @@ class Items():
         self.object_id_map={}
 
         self.label_display_format_index=0
+        self.display_group_index=0
 
         deleted=re.compile('.*_deleted_.*')
         # Find all items. Each item has a _data_ directory.
@@ -1002,6 +922,25 @@ class Items():
         self._total_selected=0
 
         self.patch()
+
+    def delete_selected_items(self):
+        debug('Items.delete_selected_items')
+        for item in self.all_selected_items:
+            item.deleted=True
+
+    def hide_selected_items(self):
+        debug('Items.hide_selected_items')
+        for item in self.all_selected_items:
+            item.hidden=True
+
+    def clear_items_from_screen(self):
+        self.canvas.delete('BaseItem')
+        
+    def switch_display_group(self):
+        debug('Items.switch_display_group')
+        self.display_group_index+=1
+        if self.display_group_index > len(self.display_groups)-1:
+            self.display_group_index=0
 
     def switch_label_display_format(self):
         debug('Items.switch_label_display_format')
@@ -1053,9 +992,18 @@ class Items():
         """
         Draw a single item on the canvas at a single point.
         """
-        object_id=item._draw(canvas=self.canvas, theme=self.theme, x=x, y=y, tag=tag, draw_label=draw_label,
-            highlight_selected=highlight_selected)
-        self.object_id_map[object_id]=item.key
+        draw=False
+        if self.get_display_group()=='default' and not item.hidden and not item.deleted:
+            draw=True
+        elif self.get_display_group()=='hidden' and item.hidden and not item.deleted:
+            draw=True
+        elif self.get_display_group()=='deleted' and item.deleted:
+            draw=True
+
+        if draw:
+            object_id=item._draw(canvas=self.canvas, theme=self.theme, x=x, y=y, tag=tag, draw_label=draw_label,
+                highlight_selected=highlight_selected)
+            self.object_id_map[object_id]=item.key
 
     def select(self, item):
         """
@@ -1070,6 +1018,9 @@ class Items():
         """
         item.selected=False
         self._total_selected-=1
+
+    def get_display_group(self):
+        return self.display_groups[self.display_group_index]
         
     def get_item_from_object_id(self, object_id):
         key=self.object_id_map[object_id]
@@ -1104,11 +1055,7 @@ class Timeline():
         # Stores information during drag and drop operations.
         self._dragging={}
         self.mouse=(0, 0)
-        self._f2_display_mode=0
-        self.display_items=True
-        self.display_hidden_items=False
-        self.display_deleted_items=False
-        
+
         # Reference to application root_path.
         self.app_folder=bin.application_root_path()
 
@@ -1195,7 +1142,7 @@ class Timeline():
 
         self.patch()
 
-    def add_tag_to_object(self, object_id, tag):
+    def add_tag(self, object_id, tag):
         """
         Add a tag to a canvas object.
         """
@@ -1220,11 +1167,6 @@ class Timeline():
             timeline.draw_details()
             self.draw_items()
 
-    def get_next_background_color(self):
-        debug('Timeline.get_next_background_color')
-        for color in BACKGROUND_COLORS:
-            debug('color: {}'.format(color))
-            yield color
 
     def _timeline_mouse_wheel(self, event):
 
@@ -1238,7 +1180,7 @@ class Timeline():
         object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
 
         if self.keyboard.f3_key_down:
-            self.theme.background_color=self.get_next_background_color()
+            self.theme.get_next_background_color()
             self.draw()
             return
 
@@ -1331,14 +1273,18 @@ class Timeline():
     def _item_is_on_timeline(self, item, timeline):
         return item.datetime >= timeline.begin_time and item.datetime <= timeline.end_time
 
-    def _delete_selected_items(self, redraw=False):
-        debug("Timeline_delete_selected_items")
-        for item in self.items.all_selected_items():
-            item.deleted=True
-            if redraw:
-                self.draw_item(item, delete_first=True)
-        self.unselect_all_items(draw=True)
-            
+    def delete_selected_items(self):
+        debug("Timeline.delete_selected_items")
+        self.items.delete_selected_items()
+        self.unselect_all_items(draw=False)
+        self.draw_items()
+
+    def hide_selected_items(self):
+        debug("Timeline.hide_selected_items")
+        self.items.hide_selected_items()
+        self.unselect_all_items(draw=False)
+        self.draw_items()
+
     def dump(self, file_name):
         f=open(file_name, mode='w')
         for item in self.items.all_items():
@@ -1349,7 +1295,7 @@ class Timeline():
 
     def _get_closest_object_id_from_xy_with_tag(self, x, y, tag, start=0):
         object_id=self.canvas.find_closest(x, y, start=start)[0]
-        debug2('_get_closest_object_id_from_xy_with_tag: {}'.format(object_id))
+        #debug2('_get_closest_object_id_from_xy_with_tag: {}'.format(object_id))
         if tag in self.canvas.gettags(object_id):
             return object_id
 
@@ -1395,16 +1341,8 @@ class Timeline():
         else:
             debug('ERROR!')
             y_as_pct_of_height=None
-        debug('y_as_pct_of_height={}'.format(y_as_pct_of_height))
+        #debug('y_as_pct_of_height={}'.format(y_as_pct_of_height))
         return y_as_pct_of_height
-
-    def _hide_selected_items(self):
-        debug('Timeline._hide_selected_items')
-        for item in self.items.all_selected_items():
-            item.hidden=True
-            item.selected=False
-            self.draw_item(item, delete_first=True)
-        self.unselect_all_items(draw=True)
 
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
@@ -1447,7 +1385,7 @@ class Timeline():
                     self._items_align('top')
         # If right arrow...
         elif dict['state']>1000 and dict['keycode']==39 and timeline:
-            time=timeline.time+datetime.timedelta(days=move_days)
+            time=timeline.time-datetime.timedelta(days=move_days)
             if self.items.total_selected > 1:
                 if self.keyboard.shift_key_down:
                     self._items_align('increase_horizontal')
@@ -1487,7 +1425,7 @@ class Timeline():
     def _keypress_delete(self):
         debug('Timeline._keypress_delete')
         # Todo: At the moment you can delete deleted items, delete should in fact purge here.
-        self._delete_selected_items(redraw=True)
+        self.delete_selected_items(redraw=True)
         
     def _keypress_escape(self):
         debug('Timeline._keypress_escape')
@@ -1500,29 +1438,8 @@ class Timeline():
         #self.statusbox.text='Display Mode {}'.format(self.item_label_int)
         
     def _keypress_f2(self):
-
-        self._f2_display_mode+=1
-
-        if self._f2_display_mode > 2:
-            self._f2_display_mode=0
-
-        if self._f2_display_mode==0:
-            self.display_items=True
-            self.display_hidden_items=False
-            self.display_deleted_items=False
-            text='Display: Default'
-        elif self._f2_display_mode==1:
-            self.display_items=False
-            self.display_hidden_items=True
-            self.display_deleted_items=False
-            text='Display: Hidden Items'
-        elif self._f2_display_mode==2:
-            self.display_items=False
-            self.display_hidden_items=False
-            self.display_deleted_items=True
-            text='Display: Deleted Items'
-
-        self.statusbox.text=text
+        self.items.switch_display_group()
+        self.items.clear_items_from_screen()
         self.draw_items()
 
     def _keypress_f3(self):
@@ -1663,7 +1580,7 @@ class Timeline():
 
     def select_item(self, item, timeline, object_id):
         self.items.select(item)
-        self.add_tag_to_object(object_id, 'selected')
+        self.add_tag(object_id, 'selected')
         self.last_timeline_clicked=timeline
 
     def _item_mouse_down(self, event):
@@ -1860,9 +1777,6 @@ class Timeline():
         self.root.configure(cursor='')
         self.root.update_idletasks()
 
-    def test(self, event):
-        debug('Timeline.test')
-
     def _open_item_rename_form(self):
         debug('_rename_item')
         object_id=self.temp['object_id']
@@ -1878,7 +1792,7 @@ class Timeline():
         self.canvas.focus_force()
 
     def _object_is_item(self, object_id):
-        if 'item' in self.canvas.gettags(object_id):
+        if 'BaseItem' in self.canvas.gettags(object_id):
             return True
         else:
             return False
