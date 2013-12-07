@@ -12,54 +12,25 @@ from collections import OrderedDict
 
 class StatusBox():
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, root, canvas, theme):
 
-        debug('StatusBox: kwargs={}'.format(kwargs))
+        debug('StatusBox')
 
-        self.root=kwargs['root']
-        self.canvas=kwargs['canvas']
-        self.bottom=0
-
-        if 'theme' in kwargs.keys():
-            self.theme=kwargs['theme']
-        else:
-            self.theme=theme.Theme()
-
+        self.root=root
+        self.canvas=canvas
+        self.theme=theme
+        self._y=0
+        self._height=0
+        self.bottom=None
+        self.width=None
+        self.x=None
         # The font_size can be a number which is a specific font size of it can be one or more "<" or ">"'s which are
         # used to adjust the size from the base font size using the theme class.
-        if 'font_size' in kwargs.keys():
-            self.font_size=kwargs['font_size']
-        else:
-            self.font_size=None
-
-        if 'width' in kwargs.keys():
-            self.width=kwargs['width']
-        else:
-            self.width=self.canvas.winfo_reqwidth
-
-        if 'height' in kwargs.keys():
-            self._height=kwargs['height']
-        else:
-            self._height=16
-
-        if 'x' in kwargs.keys():
-            self.x=kwargs['x']
-        else:
-            self.x=0
-
-        if 'y' in kwargs.keys():
-            self._y=kwargs['y']
-        else:
-            self._y=0
-        
+        self.font_size=None
         self.object_id=None
-
         self._text=None
-
         self._update_bottom()
         
-        debug('Statusbox.__init__: x={0} y={1}'.format(self.x, self.y))
-
     @property
     def y(self):
         return self._y
@@ -67,6 +38,7 @@ class StatusBox():
     @y.setter
     def y(self, y):
         self._y=y
+        self._update_bottom()
 
     @property
     def height(self):
@@ -75,9 +47,10 @@ class StatusBox():
     @height.setter
     def height(self, height):
         self._height=height
+        self._update_bottom()
 
     def _update_bottom(self):
-        self.bottom=self.y+self.height
+        self.bottom=self._y+self._height
 
     @property
     def text(self):
@@ -93,4 +66,13 @@ class StatusBox():
     def clear(self):
         debug2('StatusBox.clear')
         self.canvas.delete(self.object_id)
+
+    def draw(self, x, y, width=None):
+        """
+        Updates x and y position of statusbox.
+
+        Width is here to comply with drawable object rules in TaskManager class.
+        """
+        self.x=x
+        self.y=y
         

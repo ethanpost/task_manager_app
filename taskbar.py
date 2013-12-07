@@ -38,40 +38,20 @@ class TaskBar():
     OPEN_TASK_FROM_TASKBAR=6005
     NEW_TASK_ADDED_TO_TASKBAR=6006
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, root, canvas, theme, statusbox, height=25, **kwargs):
 
-        debug('TaskBar: kwargs={}'.format(kwargs))
-
-        if 'root' not in kwargs.keys():
-            return
-        else:
-            self.root=kwargs['root']
-
-        if 'canvas' not in kwargs.keys():
-            return
-        else:
-            self.canvas=kwargs['canvas']
+        self.root=root
+        self.canvas=canvas
+        self.theme=themes
+        self.statusbox=statusbox
 
         if 'keyboard' not in kwargs.keys():
             self.keyboard=keyboard.Keyboard(canvas=self.canvas, cbfunc=(lambda dict: self.keypress(dict)))
         else:
             self.keyboard=kwargs['keyboard']
 
-        if 'width' not in kwargs.keys():
-            self.width=self.canvas.winfo_reqwidth()
-        else:
-            self.width=kwargs['width']
-
-        # Height of the hourly timeline.
-        if 'height' not in kwargs.keys():
-            self.height=25
-        else:
-            self.height=kwargs['height']
-
-        if 'statusbox' in kwargs.keys():
-            self.statusbox=kwargs['statusbox']
-        else:
-            self.statusbox=None
+        self.width=self.canvas.winfo_reqwidth()
+        self.height=height
 
         self.x=0
         self.y=0

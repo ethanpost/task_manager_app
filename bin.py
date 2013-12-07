@@ -80,7 +80,7 @@ def seconds_between_two_dates (t1, t2):
     """
     r=(t1-t2)
     r=r.days*86400+r.seconds
-    debug3('bin.seconds_between_two_dates: r={}'.format(r))
+    debug2('bin.seconds_between_two_dates: r={}'.format(r))
     return r
 
 def minutes_between_two_dates (t1, t2):
@@ -88,7 +88,7 @@ def minutes_between_two_dates (t1, t2):
     Return the number of minutes between two dates.
     """
     r=seconds_between_two_dates(t1, t2)/60
-    debug3('bin.minutes_between_two_dates: r={}'.format(r))
+    debug2('bin.minutes_between_two_dates: r={}'.format(r))
     return r
 
 def days_between_two_dates (t1, t2):
@@ -96,12 +96,12 @@ def days_between_two_dates (t1, t2):
     Return the number of days between two dates.
     """
     r=minutes_between_two_dates (t1, t2)/60/24
-    debug3('bin.days_between_two_dates: r={}'.format(r))
+    debug2('bin.days_between_two_dates: r={}'.format(r))
     return r
 
 def add_backslash_to_backslash(string):
     r=string.replace('\\', '\\\\')
-    debug('bin.add_backslash_to_backslash: {0} {1}'.format(string, r))
+    debug2('bin.add_backslash_to_backslash: {0} {1}'.format(string, r))
     return r
 
 # ToDo: Add caching here and need a way to check modified time on file in event cache is invalidated.
@@ -168,7 +168,7 @@ def open_file_using_default_program(filepath):
 
 def sublime (file):
     program_path="C:\\Program Files\\Sublime Text 2\\sublime_text.exe"
-    debug('file={0} program_path={1}'.format(file, program_path))
+    debug2('file={0} program_path={1}'.format(file, program_path))
     #process = subprocess.Popen([program_path, file], stdout=subprocess.PIPE)
     os.startfile(file)
 
@@ -176,7 +176,7 @@ def run_program (program_path=None, file_path=None):
     process = subprocess.Popen([program_path, file_path], shell=True)
 
 def get_valid_path_name_from_string(string):
-    debug('bin.get_valid_folder_name_from_string: string={}'.format(string))
+    debug2('bin.get_valid_folder_name_from_string: string={}'.format(string))
     string=re.sub(r"[\/\\\:\*\?\"\<\>\|\.]", "", string)
     # Replace spaces with underscores.
     return string.strip().replace(' ', '_')
@@ -207,7 +207,7 @@ def mv (source_path, target_path):
     
 def mkdir(directory):
     if not os.path.exists(directory):
-        debug('mkdir: {}'.format(directory))
+        debug2('mkdir: {}'.format(directory))
         os.makedirs(directory)
 
 def rmdir(directory):
@@ -226,16 +226,16 @@ def open_database(
     name,
     folder_path=application_root_folder(),
     file_name='app.db'):
-    debug('open_database: {0} {1} {2}'.format(name, folder_path, file_name))
+    debug2('open_database: {0} {1} {2}'.format(name, folder_path, file_name))
     file_path=os.path.join(folder_path, file_name)
-    debug('file_path={}'.format(file_path))
+    debug2('file_path={}'.format(file_path))
     d=shelve.open(file_path, writeback=True)
     if name in d.keys():
         r=d[name]
     else:
         r={}
     d.close()
-    debug('open_database: r={}'.format(r))
+    debug2('open_database: r={}'.format(r))
     return r
 
 def save_database(
@@ -243,7 +243,7 @@ def save_database(
     dict,
     folder_path=application_root_folder(),
     file_name='app.db'):
-    debug('save_database: {}'.format(dict))
+    debug2('save_database: {}'.format(dict))
     file_path=os.path.join(folder_path, file_name)
     d=shelve.open(file_path, writeback=True)
     d[name]=dict
