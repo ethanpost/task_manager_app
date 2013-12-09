@@ -496,6 +496,8 @@ class Timeline():
         object_id=self.canvas.create_rectangle(item.x, item.y, item.x+item.size, item.y+item.size, fill=item.color,
            outline=outline_color, tags=tags, stipple=None, width=border_width, dash=dash)
 
+        debug('drawing, object_id={}'.format(object_id))
+        
         if self.draw_labels:
             debug('Drawing label')
             display_format=self.label_display_formats[self.label_display_format_index]
@@ -515,7 +517,7 @@ class Timeline():
                     label=item.title
             x,y,right,bottom=self.canvas.coords(object_id)
             self.canvas.create_text(right+5, y-2, text=label,
-                font=self.theme.font(size='<<'), fill="black", tags=tags, anchor="nw", justify="left")
+                font=self.theme.font(size='<<'), fill="black", tags=unique_id, anchor="nw", justify="left")
 
         return object_id
 
@@ -775,23 +777,6 @@ class BaseItem():
         if 'y' in self._backup.keys():
             self._y=self._backup['y']
 
-#    def get_label(self):
-#        debug('get_label: {}'.format(self.DISPLAY_FORMAT))
-#        if self.DISPLAY_FORMAT=='none':
-#            return None
-#        elif self.DISPLAY_FORMAT=='title':
-#            return self.title
-#        elif self.DISPLAY_FORMAT=='tag@title':
-#            if len(self.tags) > 0:
-#                return '{0}@{1}'.format(self.tags[0], self.title)
-#            else:
-#                return self.title
-#        elif self.DISPLAY_FORMAT=='status':
-#            if self.status is not None:
-#                return self.status
-#            else:
-#                return self.title
-      
     def patch(self):
         """
         Some housekeeping when we initially load the item from the .dat file.
@@ -1292,7 +1277,7 @@ class TaskManager():
         
         #self.load()
 
-        self.draw(0, 0, self.width)
+        #self.draw(0, 0, self.width)
 
         self.patch()
 
@@ -1464,7 +1449,9 @@ class TaskManager():
         debug2('Timeline._get_time_from_item')
         timeline=self._get_timeline_from_xy(x, y, off_screen_ok=True)
         if timeline:
-            return timeline.begin_time+datetime.timedelta(days=x/self.width*timeline.total_days)
+            r=timeline.begin_time+datetime.timedelta(days=x/self.width*timeline.total_days)
+            debug('_get_time_from_item: {}'.format(r))
+            return r
         else:
             return None
 
@@ -1632,6 +1619,7 @@ class TaskManager():
 
     def select_item(self, item, timeline, object_id):
         timeline.items.select(item)
+        debug('select_item: object_id={}'.format(object_id))
         self.add_tag(object_id, 'selected')
         self.last_timeline_clicked=timeline
 
@@ -1770,12 +1758,11 @@ class TaskManager():
                     x,y=self.canvas.coords(object_id)[0:2]
                     key=self._get_item_key_from_object_id(object_id)
                     item=timeline.items.get_by_key(key)
-                    timeline=self._get_timeline_from_xy(x,y, off_screen_ok=True)
                     item.datetime=self._get_time_from_xy(x,y)
+                    debug('item.datetime: {}'.format(item.datetime))
                     item.y_as_pct_of_height=(y-timeline.y)/timeline.height
                     item.save()
                 self.unselect_all_items(draw=False)
-                timeline.draw_items()
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
         elif not self.keyboard.control_key_down:
@@ -1784,7 +1771,7 @@ class TaskManager():
 
         self._dragging={}
         self.statusbox.clear()
-        timeline.draw_items()
+        timeline.draw_items(highlight_selected=True)
     
     def _item_mouse_doubleclick(self, event):
         debug('Timeline._item_mouse_doubleclick')
@@ -2050,7 +2037,6 @@ class TaskManager():
                 # Get a list of all of the objects enclosed by the rectangle.
                 oids=self.canvas.find_enclosed(x, y, x1, y1)
                 for oid in oids:
-                    debug('tags: {}'.format(self.canvas.gettags(oid)))
                     if 'BaseItem' in self.canvas.gettags(oid):
                         key=self._get_item_key_from_object_id(oid)
                         item=t.items.get_by_key(key)
@@ -2080,5 +2066,5 @@ class TaskManager():
             self.canvas.dtag(object_id, 'selected')
 
         if self.last_timeline_clicked:
-            self.last_timeline_clicked.unselect_all(draw=True)
+            self.last_timeline_clicked.unselect_all(draw=draw)
         #self.items.unselect_all(draw=draw)
