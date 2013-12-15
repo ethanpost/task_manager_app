@@ -11,7 +11,7 @@ import theme
 from collections import OrderedDict
 
 class StatusBox():
-
+    object_type='statusbox'
     def __init__(self, root, canvas, theme):
 
         debug('StatusBox')
@@ -20,7 +20,7 @@ class StatusBox():
         self.canvas=canvas
         self.theme=theme
         self._y=0
-        self._height=0
+        self._height=18
         self.bottom=None
         self.width=None
         self.x=None
@@ -50,7 +50,7 @@ class StatusBox():
         self._update_bottom()
 
     def _update_bottom(self):
-        self.bottom=self._y+self._height
+        self.bottom=self.y+self._height
 
     @property
     def text(self):

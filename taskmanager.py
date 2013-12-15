@@ -294,6 +294,7 @@ class Drawers():
         
 class Timeline():
     label_display_formats=['none', 'title', 'tag@title', 'status']
+    object_type='timeline'
     def __init__(self, name, theme, items, statusbox, type, y, height, total_days, time, label_format, canvas, draw_labels=False):
         self.key=bin.random_string(20)
         self.name=name
@@ -301,7 +302,7 @@ class Timeline():
         self.theme=theme
         self.items=items
         self.statusbox=statusbox
-        self.total_selected=0
+        #self.total_selected=0
         self.type=type
         self._y=y
         self._x=None
@@ -323,7 +324,23 @@ class Timeline():
         self.draw_labels=draw_labels
         self.time=time
         self.label_display_format_index=0
+        self._highlight_selected=False
 
+    @property
+    def total_selected(self):
+        return self.items.total_selected
+    
+    @property
+    def highlight_selected(self):
+        return self._highlight_selected
+
+    @highlight_selected.setter
+    def highlight_selected(self, tf):
+        if tf != self._highlight_selected:
+            debug('highlight_selected={0} for timeline {1}'.format(tf, self.name))
+            self._highlight_selected=tf
+            self.unselect_all(draw=False)
+            
     def _get_y_as_pct_of_height_from_xy(self, x, y):
        debug2('Timeline._get_y_as_pct_of_height_from_xy: x={0} y={1}'.format(x, y))
        y_as_pct_of_height=abs(y-self.y)/self.height
@@ -454,17 +471,16 @@ class Timeline():
                 item.selected=None
                 if draw:
                     self.draw_item(item)
+        self.items.total_selected=0
 
-        self.total_selected=0
-
-    def draw_items(self, highlight_selected=False):
-        debug('Timeline.draw_items')
+    def draw_items(self):
+        debug2('Timeline.draw_items')
         for item in self.items.all_items():
-            self.draw_item(item, highlight_selected=highlight_selected)
+            self.draw_item(item)
 
     # ToDo: Change display_label to include_label
-    def draw_item(self, item, x=None, y=None, tag=None, highlight_selected=False):
-        debug('Timeline.draw_item')
+    def draw_item(self, item, x=None, y=None, tag=None):
+        debug2('Timeline.draw_item')
         if x is not None:
             item.x=x
         else:
@@ -483,7 +499,7 @@ class Timeline():
 
         self.canvas.delete(unique_id)
 
-        if item.selected and highlight_selected:
+        if item.selected and self.highlight_selected:
             border_width=2
             outline_color='black'
             dash=(1,2)
@@ -499,7 +515,7 @@ class Timeline():
         debug('drawing, object_id={}'.format(object_id))
         
         if self.draw_labels:
-            debug('Drawing label')
+            debug2('Drawing label')
             display_format=self.label_display_formats[self.label_display_format_index]
             if display_format=='none':
                 label=None
@@ -544,7 +560,7 @@ class Timeline():
         return self._right
 
     def draw(self, x=None, y=None, width=None):
-        debug('Timeline.draw')
+        debug2('Timeline.draw')
         if x is not None:
             self.x=x
 
@@ -559,7 +575,7 @@ class Timeline():
             fill=self.theme.background_color, outline=self.theme.line_color, tags='timelines TIMELINE'+self.key)
         self.canvas.tag_lower(self.object_id)
         self.draw_details()
-        self.draw_items()
+        #self.draw_items()
 
     def _get_x_from_time(self, time):
         r=bin.days_between_two_dates(time, self.begin_time)/self.total_days*self.width
@@ -631,6 +647,8 @@ class Timeline():
         #x=self._get_x_from_time(datetime.datetime.now(), self.begin_time, self.total_days, self.width)
         #self.canvas.create_line(x, self.y, x, self.y+self.height, fill='blue', tags=tag)
         self._draw_current_time()
+
+        self.draw_items()
 
     def _draw_current_time(self):
         self.canvas.delete('blue_line')
@@ -1166,28 +1184,23 @@ class Items():
         """
         Mark an item as selected.
         """
-        item.selected=True
-        self._total_selected+=1
+        if not item.selected:
+            item.selected=True
+            self._total_selected+=1
+            debug('*** total_selected={}'.format(self._total_selected))
 
     def unselect(self, item):
         """
         Mark an item as unselected.
         """
-        item.selected=False
-        self._total_selected-=1
+        if item.selected:
+            item.selected=False
+            self._total_selected-=1
+            debug('*** total_selected={}'.format(self._total_selected))
 
     def get_display_group(self):
         return self.display_groups[self.display_group_index]
         
-    def unselect_all(self, draw=True):
-         # Set selected attribute to false for all items.
-        for item in self.all_items():
-            if item.selected:
-                item.selected=None
-                if draw:
-                    self.draw(item)
-               
-        self.total_selected=0
 
 class TaskManager():
 
@@ -1224,8 +1237,6 @@ class TaskManager():
         # Where deleted item are stored.
         self.default_deleted_items_path=os.path.join(self.app_folder, 'items', '_deleted_')
         bin.mkdir(self.default_deleted_items_path)
-
-        self.last_timeline_clicked=None
 
     def set_group(self, name, items, sync=True):
         self.group={'name': name, 'items': items, 'sync': sync}
@@ -1310,8 +1321,8 @@ class TaskManager():
         if (more_days and timeline.total_days < timeline.max_days) or \
            (less_days and timeline.total_days > timeline.min_days):
             timeline.total_days+=factor*negative_or_positive
-            timeline.draw_details()
-            self.draw_items()
+            #timeline.draw_details()
+            timeline.draw()
 
     def _timeline_mouse_wheel(self, event):
 
@@ -1352,17 +1363,17 @@ class TaskManager():
                 if event.keycode==120:
                     timeline.height+=15
                     self.draw()
-                    self.taskbar.y=self.bottom
-                    self.taskbar._draw_taskbar()
-                    self.statusbox.y=self.taskbar.bottom
-                    self.draw_items()
+                    #self.taskbar.y=self.bottom
+                    #self.taskbar._draw_taskbar()
+                    #self.statusbox.y=self.taskbar.bottom
+                    #self.draw_items()
                 elif event.keycode==-120:
                     timeline.height-=15
                     self.draw()
-                    self.taskbar.y=self.bottom
-                    self.taskbar._draw_taskbar()
-                    self.statusbox.y=self.taskbar.bottom
-                    self.draw_items()
+                    #self.taskbar.y=self.bottom
+                    #self.taskbar._draw_taskbar()
+                    #self.statusbox.y=self.taskbar.bottom
+                    #self.draw_items()
             else:
                 if event.keycode==120:
                     self._adjust_timeline_total_days(timeline, more_days=True)
@@ -1450,7 +1461,7 @@ class TaskManager():
         timeline=self._get_timeline_from_xy(x, y, off_screen_ok=True)
         if timeline:
             r=timeline.begin_time+datetime.timedelta(days=x/self.width*timeline.total_days)
-            debug('_get_time_from_item: {}'.format(r))
+            debug2('_get_time_from_item: {}'.format(r))
             return r
         else:
             return None
@@ -1486,7 +1497,7 @@ class TaskManager():
                 t.time=time
 
     def keypress(self, dict):
-        debug('Timeline.keypress: {}'.format(dict))
+        debug2('Timeline.keypress: {}'.format(dict))
 
         timeline=self._get_timeline_from_xy(x=self.mouse[0], y=self.mouse[1])
 
@@ -1617,11 +1628,24 @@ class TaskManager():
         return (object_id, item, timeline, time, taskbar_group)
 
 
+    def select_timeline(self, timeline):
+        #debug('TaskManager.select_timeline: _drawable_objects={}'.format(self._drawable_objects))
+        for object in self._drawable_objects:
+            if object.object_type=='timeline':
+                #debug('TaskManager.select_timeline: name={}'.format(object.name))
+                if object.name==timeline.name:
+                    if not object.highlight_selected:
+                        self.unselect_all_items(draw=False, timeline=object)
+                        object.highlight_selected=True
+                else:
+                    object.highlight_selected=False
+
     def select_item(self, item, timeline, object_id):
+        # This could end up calling an unselect_all so make sure this line is before the select.
+        self.select_timeline(timeline)
         timeline.items.select(item)
         debug('select_item: object_id={}'.format(object_id))
         self.add_tag(object_id, 'selected')
-        self.last_timeline_clicked=timeline
 
     def _item_mouse_down(self, event):
         debug('Timeline._item_mouse_down')
@@ -1634,17 +1658,14 @@ class TaskManager():
             debug('*** Did not click an item. ***')
             return
 
-        if timeline:
-            if timeline.items.total_selected > 0 and self.last_timeline_clicked.name!=timeline.name:
-                self.unselect_all_items(draw=False)
+        self.select_timeline(timeline)
 
         if timeline.items.total_selected==0:
             self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected==1 and not self.keyboard.control_key_down:
-            if item.selected:
-                self.unselect_all_items(draw=False)
-            else:
-                self.unselect_all_items(draw=True)
+            debug('****')
+            self.unselect_all_items(draw=False, timeline=timeline)
+            if not item.selected:
                 self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected>=1 and self.keyboard.control_key_down:
             if item.selected:
@@ -1653,11 +1674,11 @@ class TaskManager():
             else:
                 self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected > 1 and not self.keyboard.control_key_down and not item.selected:
-                self.unselect_all_items(draw=True)
+                self.unselect_all_items(draw=True, timeline=timeline)
                 self.select_item(item, timeline, object_id)
 
-        if timeline.items.total_selected==0:
-            self.last_timeline_clicked=None
+        #if timeline.items.total_selected==0:
+        #    self.last_timeline_clicked=None
 
             # Shift-Delete should purge all selected items.
             # Space-bar should hide or unhide all selected items.
@@ -1762,16 +1783,17 @@ class TaskManager():
                     debug('item.datetime: {}'.format(item.datetime))
                     item.y_as_pct_of_height=(y-timeline.y)/timeline.height
                     item.save()
-                self.unselect_all_items(draw=False)
+                self.unselect_all_items(draw=False, timeline=timeline)
             else:
                 self._item_mouse_drag_abort(event.x, event.y)
         elif not self.keyboard.control_key_down:
-            self.unselect_all_items(draw=False)
+            self.unselect_all_items(draw=False, timeline=timeline)
             self.select_item(item, timeline, object_id)
 
         self._dragging={}
         self.statusbox.clear()
-        timeline.draw_items(highlight_selected=True)
+        #timeline.draw_items()
+        self.draw()
     
     def _item_mouse_doubleclick(self, event):
         debug('Timeline._item_mouse_doubleclick')
@@ -1779,7 +1801,7 @@ class TaskManager():
         self.root.config(cursor='wait')
         self.root.update_idletasks()
         if item.type=='task':
-            self.unselect_all_items(draw=True)
+            self.unselect_all_items(draw=True, timeline=timeline)
             if self.keyboard.shift_key_down:
                 bin.open_file_using_default_program(item.folder_with_escapes())
             else:
@@ -1794,7 +1816,7 @@ class TaskManager():
             root=self.root,
             canvas=self.canvas,
             text=text)
-            self.unselect_all_items(draw=True)
+            self.unselect_all_items(draw=True, timeline=timeline)
             if f.text:
                 item.text=f.text
                 item.save()
@@ -1804,13 +1826,13 @@ class TaskManager():
         elif item.type=='link':
             if self.keyboard.shift_key_down:
                 bin.open_file_using_default_program(item.title)
-                self.unselect_all_items(draw=True)
+                self.unselect_all_items(draw=True, timeline=timeline)
             else:
                 f=modalinputbox.ModalInputBox(
                 root=self.root,
                 canvas=self.canvas,
                 text=item.text)
-                self.unselect_all_items(draw=True)
+                self.unselect_all_items(draw=True, timeline=timeline)
                 if f.text:
                     item.text=f.text
                     item.save()
@@ -1973,7 +1995,7 @@ class TaskManager():
             timeline.time=time
             timeline.draw_details()
 
-        self.draw_items()
+        self.draw()
 
     def _timeline_mouse_motion(self, event):
         self.mouse=(event.x, event.y)
@@ -2024,8 +2046,6 @@ class TaskManager():
                 else:
                     timeline.draw_details()
 
-                t.draw_items()
-
     def _timeline_mouse_up(self, event):
         debug("Timeline._timeline_mouse_up")
         if 'selectbox_object_id' in self._dragging.keys():
@@ -2042,7 +2062,6 @@ class TaskManager():
                         item=t.items.get_by_key(key)
                         # ToDo: This item selected business is just ugly.
                         self.select_item(item, t, oid)
-                t.draw_items(highlight_selected=True)
             else:
                 debug('*** t.name != dragging timeline name ***')
         elif "timeline" in self._dragging.keys():
@@ -2050,21 +2069,26 @@ class TaskManager():
             # if x==0 then the timeline was not moved, so this click on the timeline should unselect all times selected.
             if x==0:
                 # Items will stay selected if an actual timeline drag has taken place, but if not then all items will be unselected.
-                self._dragging['timeline'].unselect_all(draw=True)
+                self.unselect_all_items(draw=False, timeline=self._dragging['timeline'])
+                # self._dragging['timeline'].unselect_all(draw=True)
         self._dragging={}
+        self.draw()
 
     def update_background_tasks(self):
         debug('Timeline.update_background_tasks')
         for t in self.timelines:
             t._draw_current_time()
 
-    def unselect_all_items(self, draw=True):
+    def unselect_all_items(self, draw=True, timeline=None):
         debug('Timeline.unselect_all_items')
 
         # Remove selected tag from all items.
         for object_id in self.canvas.gettags('selected'):
             self.canvas.dtag(object_id, 'selected')
 
-        if self.last_timeline_clicked:
-            self.last_timeline_clicked.unselect_all(draw=draw)
+        if timeline:
+            timeline.unselect_all(draw=draw)
+
+        #if self.last_timeline_clicked:
+            #self.last_timeline_clicked.unselect_all(draw=draw)
         #self.items.unselect_all(draw=draw)

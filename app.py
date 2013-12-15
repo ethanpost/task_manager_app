@@ -31,10 +31,12 @@ class App(tk.Tk):
         self.items=taskmanager.Items(folder=folder)
 
         self.sb=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
+        #self.sb2=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0,  height=100, statusbox=self.sb, total_days=8/24, label_format='%I%p', draw_labels=True)
-        self.tm.add_statusbox(self.sb)
         self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85, statusbox=self.sb, total_days=7, label_format='%d%a', draw_labels=False)
         self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75, statusbox=self.sb, total_days=180, label_format='%B %y', draw_labels=False)
+        self.tm.add_statusbox(self.sb)
+        #self.tm.add_statusbox(self.sb2)
         self.tm.draw(x=0, y=0, width=950)
 
         # self.timeline.dump(file_name='C:\\temp\\dump.txt')
@@ -52,7 +54,7 @@ class App(tk.Tk):
     def configure_event(self, event):
         self.tm.width=event.width
         self.canvas.configure(height=event.height)
-        #self.tm.draw()
+        self.tm.draw()
 
     def update_background_tasks(self):
         debug('App.update_background_tasks')
