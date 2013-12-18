@@ -8,6 +8,7 @@ import datetime
 import os
 import bin
 import statusbox
+import cProfile
 
 class App(tk.Tk):
     def __init__(self, *args, **kwargs):
@@ -32,10 +33,14 @@ class App(tk.Tk):
 
         self.sb=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         #self.sb2=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
-        self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0,  height=100, statusbox=self.sb, total_days=8/24, label_format='%I%p', draw_labels=True)
-        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85, statusbox=self.sb, total_days=7, label_format='%d%a', draw_labels=False)
-        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75, statusbox=self.sb, total_days=180, label_format='%B %y', draw_labels=False)
         self.tm.add_statusbox(self.sb)
+        self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0,  height=100,
+            statusbox=self.sb, total_days=8/24, label_format='%I%p', draw_labels=True, group=0)
+        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85,
+            statusbox=self.sb, total_days=7, label_format='%d%a', draw_labels=False, group=0)
+        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75,
+            statusbox=self.sb, total_days=180, label_format='%B %y', draw_labels=False, group=0)
+
         #self.tm.add_statusbox(self.sb2)
         self.tm.draw(x=0, y=0, width=950)
 
@@ -61,7 +66,14 @@ class App(tk.Tk):
         self.timeline.update_background_tasks()
         self.after(10000, self.update_background_tasks)
 
-if __name__ == "__main__":
+def RunApp():
     app = App()
-    #app.after(10000, app.update_background_tasks)
     app.mainloop()
+    
+if __name__ == "__main__":
+    #cProfile.run('RunApp()', filename='C:\\task_manager_app\\foo.dat')
+    RunApp()
+
+    #app = App()
+    #app.after(10000, app.update_background_tasks)
+    #app.mainloop()

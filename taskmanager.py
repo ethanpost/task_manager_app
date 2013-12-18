@@ -14,6 +14,7 @@ import taskbar
 import datetime
 import theme
 import copy
+from profilehooks import coverage, profile, timecall
 
 def get_item_type_from_text(text):
     """
@@ -295,7 +296,8 @@ class Drawers():
 class Timeline():
     label_display_formats=['none', 'title', 'tag@title', 'status']
     object_type='timeline'
-    def __init__(self, name, theme, items, statusbox, type, y, height, total_days, time, label_format, canvas, draw_labels=False):
+    def __init__(self, name, theme, items, statusbox, type, y, height, total_days, time, label_format, canvas,
+        draw_labels=False, group=0):
         self.key=bin.random_string(20)
         self.name=name
         self._height=height
@@ -308,6 +310,7 @@ class Timeline():
         self._x=None
         self._width=None
         self.canvas=canvas
+        self.group=group
         self._total_days=total_days
         self.min_days=total_days/3
         self.max_days=total_days*4
@@ -587,6 +590,7 @@ class Timeline():
         r=r.replace(day=1)
         return r
 
+    @profile
     def draw_details(self):
         """
         Draw the lines and labels for the given timeline.
@@ -1208,7 +1212,7 @@ class TaskManager():
         self.root=root
         self.canvas=canvas
         self.theme=theme
-        self.group='default'
+        #self.group='default'
         self.timelines=[]
         self.statusbox=None
         # All drawable objects must have a draw method and bottom property.
@@ -1216,8 +1220,7 @@ class TaskManager():
         self._drawable_objects=[]
         self.drawers=[]
         self.bottom=0
-        self.group=None
-        self.set_group(name='default', items=None, sync=True)
+        self.groups={}
         self.sync_timelines=True
         # Just a temporary dict which we can use for this and that.
         self.temp={}
@@ -1241,15 +1244,19 @@ class TaskManager():
     def set_group(self, name, items, sync=True):
         self.group={'name': name, 'items': items, 'sync': sync}
         
-    def add_timeline (self, name, type, items, y, height, statusbox=None, total_days=None, label_format=None, draw_labels=None):
+    def add_timeline (self, name, type, items, y, height, statusbox=None, total_days=None, label_format=None,
+        draw_labels=None, group=0):
     
         time=datetime.datetime.now()
         timeline=Timeline(name=name, theme=self.theme, items=items, statusbox=statusbox, type=type, y=y, height=height,
-            total_days=total_days, time=time, label_format=label_format, canvas=self.canvas, draw_labels=draw_labels)
+            total_days=total_days, time=time, label_format=label_format, canvas=self.canvas, draw_labels=draw_labels,
+            group=group)
         timeline.load()
         self.timelines.append(timeline)
         self._drawable_objects.append(timeline)
         self.bottom=timeline.bottom
+        if group not in self.groups.keys():
+            self.groups[group]={'sync':True}
        
     def draw(self, x=None, y=None, width=None):
         if x is None:
@@ -1491,10 +1498,16 @@ class TaskManager():
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
 
-    def _timelines_set_time(self, time):
-        if self.sync_timelines:
+    def _timelines_set_time(self, time, timeline):
+        #if self.groups[timeline.group]['sync']==True:
+        if True:
             for t in self.timelines:
-                t.time=time
+                if t.group==timeline.group:
+                    t.time=time
+                    t.draw_details()
+        else:
+            timeline.time=time
+            timeline.draw_details()
 
     def keypress(self, dict):
         debug2('Timeline.keypress: {}'.format(dict))
@@ -1512,12 +1525,8 @@ class TaskManager():
                     timeline._items_align('decrease_horizontal')
                 else:
                     timeline._items_align('left')
-            elif self.sync_timelines:
-                self._timelines_set_time(time)
-                self.draw()
             else:
-                timeline.time=time
-                self.draw()
+                self._timelines_set_time(time, timeline)
         # If up arrow...
         elif dict['state']>1000 and dict['keycode']==38 and timeline:
             if timeline.items.total_selected > 1:
@@ -1533,14 +1542,8 @@ class TaskManager():
                     timeline._items_align('increase_horizontal')
                 else:
                     timeline._items_align('right')
-            elif self.sync_timelines:
-                self._timelines_set_time(time)
-                self.draw()
-                #self.draw_items()
             else:
-                timeline.time=time
-                self.draw()
-                #self.draw_items()
+                self._timelines_set_time(time, timeline)
         # If down arrow...
         elif dict['state']>1000 and dict['keycode']==40 and timeline:
             if self.keyboard.shift_key_down:
@@ -1562,7 +1565,7 @@ class TaskManager():
             self._keypress_f3()
         elif dict['state']==8 and dict['keycode']==76:
             # l Key
-            self.sync_timelines=not self.sync_timelines
+            self.groups[timeline.group]['sync']=not self.groups[timeline.group]['sync']
 
     def _keypress_delete(self):
         debug('Timeline._keypress_delete')
@@ -1653,6 +1656,7 @@ class TaskManager():
         # Will not need to re-draw on mouse down since this is always triggered by mouse up.
 
         object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
+        allow_drag=not self.keyboard.control_key_down
 
         if not item:
             debug('*** Did not click an item. ***')
@@ -1664,9 +1668,13 @@ class TaskManager():
             self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected==1 and not self.keyboard.control_key_down:
             debug('****')
-            self.unselect_all_items(draw=False, timeline=timeline)
             if not item.selected:
+                self.unselect_all_items(draw=False, timeline=timeline)
                 self.select_item(item, timeline, object_id)
+                allow_drag=False
+            else:
+                self.unselect_all_items(draw=False, timeline=timeline)
+                
         elif timeline.items.total_selected>=1 and self.keyboard.control_key_down:
             if item.selected:
                 timeline.items.unselect(item)
@@ -1684,7 +1692,7 @@ class TaskManager():
             # Space-bar should hide or unhide all selected items.
             # Space-bar should undelete all selected items.
             
-        if not self.keyboard.control_key_down:
+        if allow_drag:
             self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self._dragging['all_coords']={}
@@ -1987,16 +1995,9 @@ class TaskManager():
     def _timeline_mouse_doubleclick(self, event):
         debug('Timeline._timeline_mouse_doubleclick')
         object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y)
-        if self.sync_timelines:
-            for t in self.timelines:
-                t.time=time
-                t.draw_details()
-        else:
-            timeline.time=time
-            timeline.draw_details()
-
-        self.draw()
-
+        self.groups[timeline.group]['sync']=True
+        self._timelines_set_time(time, timeline)
+    
     def _timeline_mouse_motion(self, event):
         self.mouse=(event.x, event.y)
         timeline=self._get_timeline_from_xy(x=event.x, y=event.y, off_screen_ok=False)
@@ -2039,12 +2040,7 @@ class TaskManager():
                 days=x/self.width*t.total_days*-1
                 t.time=self._dragging['time']+datetime.timedelta(days=days)
                 self._display_time_with_text(t.time)
-                if self.sync_timelines:
-                    for timeline in self.timelines:
-                       timeline.time=t.time
-                       timeline.draw_details()
-                else:
-                    timeline.draw_details()
+                self._timelines_set_time(t.time, t)
 
     def _timeline_mouse_up(self, event):
         debug("Timeline._timeline_mouse_up")
