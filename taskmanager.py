@@ -296,24 +296,32 @@ class Drawers():
 class Timeline():
     label_display_formats=['none', 'title', 'tag@title', 'status']
     object_type='timeline'
-    def __init__(self, name, theme, items, statusbox, type, y, height, total_days, time, label_format, canvas,
+    def __init__(self, name, theme, items, statusbox, type, y, height, total_days_displayed, min_days_displayed,
+        max_days_displayed, time, label_format, canvas,
         draw_labels=False, group=0):
         self.key=bin.random_string(20)
         self.name=name
-        self._height=height
+        self.height=height
+        self.canvas=canvas
         self.theme=theme
         self.items=items
-        self.statusbox=statusbox
-        #self.total_selected=0
-        self.type=type
-        self._y=y
-        self._x=None
-        self._width=None
-        self.canvas=canvas
         self.group=group
-        self._total_days=total_days
-        self.min_days=total_days/3
-        self.max_days=total_days*4
+        self.statusbox=statusbox
+        self.type=type
+        self.y=y
+        # X always 0 for now.
+        self.x=0
+        self._pages=10
+        self.width=canvas.winfo_reqwidth()*self._pages
+        self.left=self.x-(self.width/2)
+        self.right=self.x+(self.width/2)
+        self.top=self.y
+        self.middle=canvas.winfo_reqwidth()/2
+        self.bottom=self.y+height
+        self._total_days_displayed=total_days_displayed
+        self.total_days=self.total_days_displayed*self._pages
+        self.min_days=min_days_displayed
+        self.max_days=max_days_displayed
         self._time=None
         self.label_format=label_format
         self._right=None
@@ -322,12 +330,21 @@ class Timeline():
         self.end_time=None
         self.first_label=None
         self._database_path=os.path.join(bin.application_root_path(), 'data', 'timeline_{}.cfg'.format(self.name))
-        self._update_bottom()
         self.object_id=None
         self.draw_labels=draw_labels
         self.time=time
         self.label_display_format_index=0
         self._highlight_selected=False
+
+    def _on_configure(self):
+        debug('Timeline: _on_configure')
+        self.width=self.canvas.winfo_reqwidth()*self._pages
+        self.left=self.x-(self.width/2)
+        self.right=self.x+(self.width/2)
+        self.top=self.y
+        self.middle=self.canvas.winfo_reqwidth()/2
+        self.bottom=self.y+self.height
+        #debug('reqwidth={}'.format(self.canvas.winfo_reqwidth()))
 
     @property
     def total_selected(self):
@@ -344,8 +361,8 @@ class Timeline():
             self._highlight_selected=tf
             self.unselect_all(draw=False)
             
-    def _get_y_as_pct_of_height_from_xy(self, x, y):
-       debug2('Timeline._get_y_as_pct_of_height_from_xy: x={0} y={1}'.format(x, y))
+    def _get_pct_of_height_from_y(self, y):
+       debug2('Timeline._get_pct_of_height_from_y')
        y_as_pct_of_height=abs(y-self.y)/self.height
        return y_as_pct_of_height
 
@@ -408,7 +425,7 @@ class Timeline():
             y=top_of_first_item
             for item in items_sorted_from_top_down:
                 rollback=(y+item[1].size > self.bottom)
-                pct_of_height=self._get_y_as_pct_of_height_from_xy(item[1].x, y)
+                pct_of_height=self._get_pct_of_height_from_y(y)
                 rollback=pct_of_height is None or rollback
                 if rollback:
                     break
@@ -458,13 +475,15 @@ class Timeline():
             self.label_display_format_index=0
 
     @property
-    def total_days(self):
-        return self._total_days
+    def total_days_displayed(self):
+        return self._total_days_displayed
 
-    @total_days.setter
-    def total_days(self, total_days):
-        self._total_days=total_days
-        self._update_time_related_properties()
+    @total_days_displayed.setter
+    def total_days_displayed(self, total_days_displayed):
+        self.total_days=total_days_displayed*10
+        self._total_days_displayed=total_days_displayed
+        self._on_time_change()
+
 
     def unselect_all(self, draw=True):
         debug('Timeline.unselect_all')
@@ -483,7 +502,8 @@ class Timeline():
 
     # ToDo: Change display_label to include_label
     def draw_item(self, item, x=None, y=None, tag=None):
-        debug2('Timeline.draw_item')
+        debug('Timeline.draw_item: x={0} y={1}'.format(x, y))
+
         if x is not None:
             item.x=x
         else:
@@ -494,11 +514,13 @@ class Timeline():
         else:
             item.y=self.y+(self.height*item.y_as_pct_of_height)
 
+
+
         unique_id='{0}_{1}'.format(self.name, item.key)
         key='key={}'.format(item.key)
-        tags='{0} {1} {2} {3}'.format(key, 'BaseItem', item.key, unique_id)
+        tags='{0} {1} {2} {3} {4}'.format(key, 'BaseItem', item.key, unique_id, self.key)
 
-        #debug('x={0} y={1}'.format(item.x, item.y))
+        debug('x={0} y={1}'.format(item.x, item.y))
 
         self.canvas.delete(unique_id)
 
@@ -506,7 +528,7 @@ class Timeline():
             border_width=2
             outline_color='black'
             dash=(1,2)
-            tags='{0} {1}'.format(tags, 'selected',)
+            tags=tags + ('selected',)
         else:
             border_width=1
             outline_color='black'
@@ -535,8 +557,8 @@ class Timeline():
                 else:
                     label=item.title
             x,y,right,bottom=self.canvas.coords(object_id)
-            self.canvas.create_text(right+5, y-2, text=label,
-                font=self.theme.font(size='<<'), fill="black", tags=unique_id, anchor="nw", justify="left")
+            self.canvas.create_text(right+5, y-2, text=label, font=self.theme.font(size='<<'), fill="black",
+                tags=tags, anchor="nw", justify="left")
 
         return object_id
 
@@ -549,49 +571,139 @@ class Timeline():
     def load(self):
         d=bin.open_database2(self._database_path)
         if d:
-            self.height=d['height']
-            self.total_days=d['total_days']
+            #self.height=d['height']
+            #self.total_days=d['total_days']
             self.key=d['key']
             self.time=datetime.datetime.now()
 
-    @property
-    def bottom(self):
-        return self._bottom
-
-    @property
-    def right(self):
-        return self._right
-
-    def draw(self, x=None, y=None, width=None):
-        debug2('Timeline.draw')
-        if x is not None:
-            self.x=x
+    def redraw(self):
+        self._on_configure()
+        self.draw()
+        
+    def draw(self, y=None):
 
         if y is not None:
+            self.top=y
             self.y=y
-            
-        if width is not None:
-            self.width=width
 
-        self.canvas.delete('TIMELINE'+self.key)
-        self.object_id=self.canvas.create_rectangle(self.x, self.y, self.right, self.bottom,
-            fill=self.theme.background_color, outline=self.theme.line_color, tags='timelines TIMELINE'+self.key)
+        self._on_configure()
+        self.canvas.delete(self.key)
+        self.object_id=self.canvas.create_rectangle(self.left, self.top, self.right, self.bottom,
+            fill=self.theme.background_color, outline=self.theme.line_color, tags=(self.key, 'timelines'))
         self.canvas.tag_lower(self.object_id)
-        self.draw_details()
-        #self.draw_items()
+        self.draw_details(delete=False)
+        debug('Timeline.draw: x={0} top={1} right={2} bottom={3} middle={4}'.format(self.x, self.top, self.right, self.bottom, self.middle))
 
     def _get_x_from_time(self, time):
-        r=bin.days_between_two_dates(time, self.begin_time)/self.total_days*self.width
-        #debug2('Timeline._get_x_from_time: r={}'.format(r))
+        r=self.left+(bin.days_between_two_dates(time, self.begin_time)/self.total_days*self.width)
+        debug2('_get_x_from_time: time={0} begin_time={1} total_days={2} width={3} r={4}'.format(time, self.begin_time, self.total_days, self.width, r))
+        return r
+        
+    def _get_time_from_x(self, x):
+        x_as_days_from_begin_time=self.total_days*((abs(self.left)+x)/self.width)
+        # ToDo: I don't understand why the +1 is needed here! WHY???? And only works when total days not .5!
+        r=self.begin_time+datetime.timedelta(days=x_as_days_from_begin_time)
+        debug('_get_time_from_x: x={0} total_days={1} width={2} begin_time={3} r={4} x_as_days_from_begin_time={5}'.format(x, self.total_days, self.width, self.begin_time, r, x_as_days_from_begin_time))
         return r
 
+    def move2(self, days):
+        time_to_move_to=self.time+datetime.timedelta(days=days)
+        x_to=self._get_x_from_time(time_to_move_to)
+        x_from=self._get_x_from_time(self.time)
+        x=x_from-x_to
+        #x_to_move_to=self._get_x_from_time(time)
+        #x_now=self._get_x_from_time(self.time)
+        #x=x_now-x_to_move_to
+        debug('Timeline.move: x={}'.format(x))
+        self.canvas.move('moves', x, 0)
+        self.time=time_to_move_to
+
+    def move(self, time):
+        x_to_move_to=self._get_x_from_time(time)
+        x_now=self._get_x_from_time(self.time)
+        x=x_now-x_to_move_to
+        debug('Timeline.move: x={}'.format(x))
+        self.canvas.move(self.key, x, 0)
+        self.time=time
+        
+    #def _get_time_from_x(self, x):
+        # foo
+
+    #def scroll(self, x):
+        
     def _get_next_month(self, datetime_object):
         r=datetime_object.replace(day=28)+datetime.timedelta(days=4)
         r=r.replace(day=1)
         return r
 
+    def draw_details(self, delete=True):
+        """
+        Draw the lines and labels for the given timeline.
+        """
+        debug2('Timeline.draw_details')
+
+        if delete:
+            self.canvas.delete(self.key, 'red'+self.key)
+
+        font_size='<<'
+
+        # Get the X position of the first label.
+
+        x=self._get_x_from_time(self.first_label)
+        debug('first_label={}'.format(x))
+
+        label_time=self.first_label
+        for i in range(1,500):
+            l=bin.to_char(label_time, self.label_format)
+            self.canvas.create_line(x, self.top, x, self.bottom, fill=self.theme.line_color, tags=(self.key))
+            self.canvas.create_text(x+3,self.bottom-8, font=self.theme.font(size=font_size), text=l, anchor='w', fill=self.theme.font_color, tags=(self.key))
+            if self.type=='hourly':
+                label_time=label_time+datetime.timedelta(hours=1)
+                if self.total_days <= 12/24*4:
+                    for i in range(1,4):
+                        minute_time=label_time+datetime.timedelta(days=i*15/1440)
+                        x=self._get_x_from_time(minute_time)
+                        self.canvas.create_line(x, self.top, x, self.bottom, fill='light gray', tags=(self.key))
+                        self.canvas.create_text(x+3,self.top+8, font=self.theme.font(size=font_size), text=str(i*15), anchor='w', fill='light gray', tags=(self.key))
+            elif self.type=='daily':
+                if self.total_days <= 3*4:
+                    for i in range(1,24):
+                        hourly_time=label_time+datetime.timedelta(hours=i)
+                        x=self._get_x_from_time(hourly_time)
+                        self.canvas.create_line(x, self.top, x, self.bottom, fill='light gray', tags=(self.key))
+                        self.canvas.create_text(x+3,self.top+8, font=self.theme.font(size=font_size), text=str(i), anchor='w', fill='light gray', tags=(self.key))
+                label_time=label_time+datetime.timedelta(hours=24)
+            elif self.type=='monthly':
+                if self.total_days <= 60*4:
+                    for i in range(1,bin.get_number_of_days_in_month_from_datetime(label_time)):
+                        daily_time=label_time+datetime.timedelta(hours=i*24)
+                        x=self._get_x_from_time(daily_time)
+                        self.canvas.create_line(x, self.top, x, self.bottom, fill='light gray', tags=(self.key))
+                        self.canvas.create_text(x+3,self.top+8, font=self.theme.font(size=font_size), text=str(i+1), anchor='w', fill='light gray', tags=(self.key))
+                label_time=self._get_next_month(label_time)
+
+            x=self._get_x_from_time(label_time)
+
+            #if label_time > self.begin_time+datetime.timedelta(days=self.total_days):
+                #break
+            if label_time > self.end_time:
+                break
+
+        # Draw red line in middle of timeline.
+        x=self._get_x_from_time(self.time)
+        self.canvas.create_line(self.middle, self.top, self.middle, self.bottom, fill='red', tags=('red'+self.key))
+
+        # Draw blue line at current time.
+        #tag="blue_line"
+        #self.canvas.delete(tag)
+        #x=self._get_x_from_time(datetime.datetime.now(), self.begin_time, self.total_days, self.width)
+        #self.canvas.create_line(x, self.y, x, self.y+self.height, fill='blue', tags=tag)
+        self._draw_current_time()
+
+        self.draw_items()
+
     @profile
-    def draw_details(self):
+    def draw_details2(self):
         """
         Draw the lines and labels for the given timeline.
         """
@@ -655,53 +767,10 @@ class Timeline():
         self.draw_items()
 
     def _draw_current_time(self):
-        self.canvas.delete('blue_line')
+        self.canvas.delete('blue'+self.key)
         # Draw blue line at current time.
         x=self._get_x_from_time(datetime.datetime.now())
-        self.canvas.create_line(x, self.y, x, self.y+self.height, fill='blue', tags='blue_line')
-
-    @property
-    def y(self):
-        return self._y
-
-    @y.setter
-    def y(self, y):
-        self._y=y
-        self._update_bottom()
-
-    @property
-    def x(self):
-        return self._x
-
-    @x.setter
-    def x(self, x):
-        self._x=x
-        self._update_right()
-
-    @property
-    def width(self):
-        return self._width
-
-    @width.setter
-    def width(self, width):
-        self._width=width
-        self._update_right()
-
-    @property
-    def height(self):
-        return self._height
-
-    @height.setter
-    def height(self, height):
-        self._height=height
-        self._update_bottom()
-
-    def _update_bottom(self):
-        self._bottom=self._y+self._height
-
-    def _update_right(self):
-        if self.width is not None and self.x is not None:
-            self._right=self.x+self.width
+        self.canvas.create_line(x, self.top, x, self.top+self.height, fill='blue', tags=(self.key, 'blue'+self.key))
 
     @property
     def time(self):
@@ -710,19 +779,20 @@ class Timeline():
     @time.setter
     def time (self, time):
         self._time=time
-        self._update_time_related_properties()
+        self._on_time_change()
 
-    def _update_time_related_properties(self):
-        self.begin_time=self._time-datetime.timedelta(days=self.total_days/2)
+    def _on_time_change(self):
+        
+        self.begin_time=self._time-datetime.timedelta(days=self.total_days/2+(self.total_days/self._pages/2))
         self.end_time=self.begin_time+datetime.timedelta(days=self.total_days)
 
         if self.type=='hourly':
             self.first_label=self.begin_time.replace(minute=0, second=0, microsecond=0)
+            # debug('first_label={}'.format(self.first_label))
         elif self.type=="daily":
             self.first_label=self.begin_time.replace(hour=0, minute=0, second=0, microsecond=0)
         elif self.type=="monthly":
             self.first_label=self.begin_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
 
 class BaseItem():
 
@@ -1244,13 +1314,14 @@ class TaskManager():
     def set_group(self, name, items, sync=True):
         self.group={'name': name, 'items': items, 'sync': sync}
         
-    def add_timeline (self, name, type, items, y, height, statusbox=None, total_days=None, label_format=None,
-        draw_labels=None, group=0):
+    def add_timeline (self, name, type, items, y, height, statusbox=None, total_days_displayed=None,
+        min_days_displayed=None, max_days_displayed=None, label_format=None, draw_labels=None, group=0):
     
         time=datetime.datetime.now()
         timeline=Timeline(name=name, theme=self.theme, items=items, statusbox=statusbox, type=type, y=y, height=height,
-            total_days=total_days, time=time, label_format=label_format, canvas=self.canvas, draw_labels=draw_labels,
-            group=group)
+            total_days_displayed=total_days_displayed, min_days_displayed=min_days_displayed,
+            max_days_displayed=max_days_displayed, time=time, label_format=label_format, canvas=self.canvas,
+            draw_labels=draw_labels, group=group)
         timeline.load()
         self.timelines.append(timeline)
         self._drawable_objects.append(timeline)
@@ -1262,14 +1333,17 @@ class TaskManager():
         if x is None:
             x=self.x
         if width is None:
-            width=self.width
+            width=self.canvas.winfo_reqwidth()
         if y is None:
             _y=0
         else:
             _y=y
         # All drawable objects must have a draw method and bottom property.
         for object in self._drawable_objects:
-            object.draw(x=x, y=_y, width=width)
+            if object.object_type=='timeline':
+                object.draw(y=_y)
+            else:
+                object.draw(x=x, y=_y, width=width)
             _y=object.bottom
         self.bottom=_y
         
@@ -1322,13 +1396,11 @@ class TaskManager():
         else:
             negative_or_positive=-1
 
-        factor=timeline.total_days/15
+        factor=timeline.total_days_displayed/15
 
-        debug('total_days={0} min_days={1} max_days={2}'.format(timeline.total_days, timeline.min_days, timeline.max_days))
-        if (more_days and timeline.total_days < timeline.max_days) or \
-           (less_days and timeline.total_days > timeline.min_days):
-            timeline.total_days+=factor*negative_or_positive
-            #timeline.draw_details()
+        debug('total_days_displayed={0} min_days={1} max_days={2}'.format(timeline.total_days_displayed, timeline.min_days, timeline.max_days))
+        if (more_days and timeline.total_days_displayed < timeline.max_days) or (less_days and timeline.total_days_displayed > timeline.min_days):
+            timeline.total_days_displayed+=factor*negative_or_positive
             timeline.draw()
 
     def _timeline_mouse_wheel(self, event):
@@ -1463,16 +1535,6 @@ class TaskManager():
         debug2('Timeline._get_item_key_from_object_id')
         #return self._map_object_id_to_item_key[object_id]
 
-    def _get_time_from_xy(self, x, y):
-        debug2('Timeline._get_time_from_item')
-        timeline=self._get_timeline_from_xy(x, y, off_screen_ok=True)
-        if timeline:
-            r=timeline.begin_time+datetime.timedelta(days=x/self.width*timeline.total_days)
-            debug2('_get_time_from_item: {}'.format(r))
-            return r
-        else:
-            return None
-
     def  _get_timeline_from_xy(self, x, y, off_screen_ok=False):
         #debug2('Timeline._get_timeline_from_item: x={0} y={1}'.format(x, y))
         if off_screen_ok:
@@ -1484,19 +1546,16 @@ class TaskManager():
                 if x > self.x and x < t.right and y > t.y and y < t.bottom:
                     return t
 
-    def _get_y_as_pct_of_height_from_xy(self, x, y):
-        debug2('Timeline._get_y_as_pct_of_height_from_xy: x={0} y={1}'.format(x, y))
-        timeline=self._get_timeline_from_xy(x, y)
-        if timeline:
-            y_as_pct_of_height=abs(y-timeline.y)/timeline.height
-        else:
-            debug('ERROR!')
-            y_as_pct_of_height=None
-        #debug('y_as_pct_of_height={}'.format(y_as_pct_of_height))
-        return y_as_pct_of_height
-
     def _is_item_being_dragged (self):
         return 'object_id' in self._dragging
+
+    def _timelines_move(self, time, timeline):
+        if self.groups[timeline.group]['sync']==True:
+            for t in self.timelines:
+                if t.group==timeline.group:
+                    t.move(time)
+        else:
+            t.move(time)
 
     def _timelines_set_time(self, time, timeline):
         #if self.groups[timeline.group]['sync']==True:
@@ -1621,10 +1680,12 @@ class TaskManager():
         taskbar_group=None
         object_id=self._get_closest_object_id_from_xy_with_tag(x, y, 'BaseItem')
         timeline=self._get_timeline_from_xy(x, y)
-        time=self._get_time_from_xy(x, y)
+        if timeline:
+            time=timeline._get_time_from_x(x)
         if object_id:
             key=self._get_item_key_from_object_id(object_id)
-            item=timeline.items.get_by_key(key)
+            if timeline:
+                item=timeline.items.get_by_key(key)
             if use_object_coords:
                 x,y=self.canvas.coords(object_id)[0:2]
         debug2('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
@@ -1702,6 +1763,7 @@ class TaskManager():
             self._dragging['coords']=self.canvas.coords(object_id)
             self._dragging['x']=self._dragging['x0']=event.x
             self._dragging['y']=self._dragging['y0']=event.y
+            self._dragging['timeline']=timeline
              # Store the original position of all selected items in case we need to abort the drag and drop.
             for object_id in self.canvas.gettags('selected'):
                 self._dragging['all_coords']['object_id']=self.canvas.coords(object_id)
@@ -1737,7 +1799,7 @@ class TaskManager():
             debug('Dragging')
             object_id=self._dragging['object_id']
             coords=self.canvas.coords(object_id)
-            self._display_time_with_text(self._get_time_from_xy(coords[0], coords[1]))
+            self._display_time_with_text(self._dragging['timeline']._get_time_from_x(coords[0]))
             delta_x = event.x - self._dragging["x"]
             delta_y = event.y - self._dragging["y"]
             self._dragging["x"] = event.x
@@ -1758,9 +1820,9 @@ class TaskManager():
 
         object_id,item,timeline,time,taskbar_group=self._get_xy(event.x, event.y, use_object_coords=True)
 
-        if not item:
-            debug('*** Item not found. ***')
-            return
+       # if not item:
+            #debug('*** Item not found. ***')
+            #return
 
         delta_x=0
         delta_y=0
@@ -1787,13 +1849,16 @@ class TaskManager():
                     x,y=self.canvas.coords(object_id)[0:2]
                     key=self._get_item_key_from_object_id(object_id)
                     item=timeline.items.get_by_key(key)
-                    item.datetime=self._get_time_from_xy(x,y)
+                    item.datetime=timeline._get_time_from_x(x)
                     debug('item.datetime: {}'.format(item.datetime))
                     item.y_as_pct_of_height=(y-timeline.y)/timeline.height
                     item.save()
-                self.unselect_all_items(draw=False, timeline=timeline)
+                self.unselect_all_items(draw=False, timeline=self._dragging['timeline'])
             else:
+                debug('*** aborting drag event ***')
                 self._item_mouse_drag_abort(event.x, event.y)
+                self.unselect_all_items(draw=False, timeline=self._dragging['timeline'])
+                
         elif not self.keyboard.control_key_down:
             self.unselect_all_items(draw=False, timeline=timeline)
             self.select_item(item, timeline, object_id)
@@ -1968,8 +2033,8 @@ class TaskManager():
         if not timeline:
             return
 
-        y_pct=self._get_y_as_pct_of_height_from_xy(x, y)
-        t=self._get_time_from_xy(x, y)
+        y_pct=timeline._get_pct_of_height_from_y(y)
+        t=timeline._get_time_from_x(x)
 
         self._timeline_disable_window()
 
@@ -2005,7 +2070,7 @@ class TaskManager():
             self.statusbox=timeline.statusbox
             if self.keyboard.shift_key_down:
                 # Display time under mouse pointer when shift key down but mouse pointer not own.
-                self._display_time_with_text(self._get_time_from_xy(event.x, event.y))
+                self._display_time_with_text(timeline._get_time_from_x(event.x))
             else:
                 self.statusbox.clear()
 
@@ -2037,10 +2102,14 @@ class TaskManager():
             elif x > 5 or 'selectbox_object_id' not in self._dragging.keys():
                 self._dragging['dragging']=True
                 # This is a drag timeline operation.
-                days=x/self.width*t.total_days*-1
-                t.time=self._dragging['time']+datetime.timedelta(days=days)
+                days=x/t.width*t.total_days*-1
+                time=self._dragging['time']+datetime.timedelta(days=days)
+                self._timelines_move(time, t)
+                #t.move(self._dragging['time']+datetime.timedelta(days=days))
+                #t.time=self._dragging['time']+datetime.timedelta(days=days)
                 self._display_time_with_text(t.time)
-                self._timelines_set_time(t.time, t)
+                
+                #self._timelines_set_time(t.time, t)
 
     def _timeline_mouse_up(self, event):
         debug("Timeline._timeline_mouse_up")
