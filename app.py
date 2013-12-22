@@ -34,14 +34,9 @@ class App(tk.Tk):
         self.sb=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         #self.sb2=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         self.tm.add_statusbox(self.sb)
-        self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0,  height=100,
-            statusbox=self.sb, total_days_displayed=1, min_days_displayed=.5, max_days_displayed=1,
-            label_format='%I%p', draw_labels=True, group=0)
-        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85,
-            statusbox=self.sb, total_days_displayed=7, min_days_displayed=1, max_days_displayed=21,
-            label_format='%d%a', draw_labels=False, group=0)
-#        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75,
-#            statusbox=self.sb, total_days=180, label_format='%B %y', draw_labels=False, group=0)
+        self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0, height=100, statusbox=self.sb, draw_labels=True, group=0)
+        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85, statusbox=self.sb, draw_labels=False, group=0)
+        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75, statusbox=self.sb, draw_labels=False, group=0)
 
         #self.tm.add_statusbox(self.sb2)
         self.tm.draw(x=0, y=0)
