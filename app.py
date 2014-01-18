@@ -31,12 +31,17 @@ class App(tk.Tk):
         bin.mkdir(folder)
         self.items=taskmanager.Items(folder=folder)
 
+        folder=os.path.join(bin.application_root_folder(), 'items2')
+        bin.mkdir(folder)
+        self.items2=taskmanager.Items(folder=folder)
+
         self.sb=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         #self.sb2=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         self.tm.add_statusbox(self.sb)
         self.tm.add_timeline(name='hourly', type='hourly', items=self.items, y=0, height=100, statusbox=self.sb, draw_labels=True, group=0)
-        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=100, height=85, statusbox=self.sb, draw_labels=False, group=0)
-        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=100+85, height=75, statusbox=self.sb, draw_labels=False, group=0)
+        self.tm.add_timeline(name='daily', type='daily', items=self.items, y=101, height=85, statusbox=self.sb, draw_labels=False, group=0)
+        self.tm.add_timeline(name='monthly', type='monthly', items=self.items, y=101+85+1, height=75, statusbox=self.sb, draw_labels=False, group=0)
+        self.tm.add_timeline(name='monthly2', type='monthly2', items=self.items2, y=101+85+1+75+1, height=100, statusbox=self.sb, draw_labels=True, group=1)
 
         #self.tm.add_statusbox(self.sb2)
         self.tm.draw(x=0, y=0)
