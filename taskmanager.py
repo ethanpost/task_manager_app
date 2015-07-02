@@ -546,6 +546,7 @@ class Timeline():
         self.label_state = LableState()
         self.hidden = False
         self.sync_time = True
+        self.disable_current_time = False
 
         # Local color palette.
         self.colorpalette = ColorPalette()
@@ -944,9 +945,15 @@ class Timeline():
         return object_id
 
     def draw_line_for_current_time(self):
-        # Draw blue line at current time.
-        x = self._get_x_from_time(datetime.datetime.now())
-        self.canvas.create_line(x, self.top, x, self.bottom, fill='blue', tags=(self.draw_details_tag, 'current_time{}'.format(self.key)))
+        # Draw blue line at current time. This is disabled during timeline drag events.
+        if not self.group.disable_drawing_current_time:
+            x = self._get_x_from_time(datetime.datetime.now())
+            self.canvas.create_line(x,
+                                    self.top,
+                                    x,
+                                    self.bottom,
+                                    fill='blue',
+                                    tags=(self.draw_details_tag, 'current_time{}'.format(self.key)))
 
     def _get_x_from_time(self, time):
         r = self.left + (bin.days_between_two_dates(time, self.begin_time) / self.total_days * self.width)
@@ -1112,7 +1119,14 @@ class Timeline():
             self.x_moved_since_last_draw -= x
             # Need to force a re-draw here, we are close to the end of the timeline which is painted offscreen.
             if self.x_moved_since_last_draw / self.left > .85 or self.x_moved_since_last_draw / self.right > .85:
-                self.draw()
+                # If we are in a timeline drag operation drawing the current time is disabled. We need to
+                # re-enable it temporarily for this draw then disable it again.
+                if self.group.disable_drawing_current_time:
+                    self.group.disable_drawing_current_time = False
+                    self.draw()
+                    self.group.disable_drawing_current_time = True
+                else:
+                    self.draw()
 
     def redraw(self):
         self.draw()
@@ -1724,6 +1738,9 @@ class Group():
         self.timelines = []
         self.items = Items(directory=group_directory)
         self.bottom = 0
+        # When dragging a timeline there was a bug which would cause the line to be drawn in the wrong position.
+        # The only solution I could discover was to disable drawing the line during timeline drag operations.
+        self.disable_drawing_current_time = False
         self.load()
         debug('Group {} loaded'.format(self.key))
 
@@ -2825,6 +2842,7 @@ class TaskManager():
             # This is not a drag operation, yet.
             return
         elif x > 5 or not self.dragging.is_dragging_selectbox():
+            t.group.disable_drawing_current_time = True
             self.dragging.dragging_timeline = True
             # This is a drag timeline operation.
             days = x / t.width * t.total_days * -1
@@ -2851,12 +2869,17 @@ class TaskManager():
             else:
                 debug('*** t.name != dragging timeline name ***')
         elif self.dragging.timeline:
+            # Set t to timeline here so we can re-enable drawing current time every time we mouse up.
+            t = self.dragging.timeline
             x = event.x - self.dragging.x
             # if x==0 then the timeline was not moved, so this click on the timeline should unselect all times selected.
             if x == 0:
                 # Items will stay selected if an actual timeline drag has taken place, but if not then all items will be unselected.
                 self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=self.dragging.timeline)
                 # self._dragging['timeline'].unselect_all(draw=True)
+
+        # Always be sure we are drawing current time when there is a timeline mouse up event.
+        t.group.disable_drawing_current_time = False
         self.dragging = None
         self.dragging = Dragging()
         self.draw()
