@@ -58,6 +58,7 @@ class StatusBox():
 
     @text.setter
     def text(self, text):
+        debug('text={}'.format(text))
         self.clear()
         if text:
             self.object_id=self.canvas.create_text(self.x, self.y, text=text, font=self.theme.font(size=self.font_size),

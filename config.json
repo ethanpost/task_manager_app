@@ -1,0 +1,11 @@
+
+{
+    "timeline": {
+        "name" : "default",
+        "bgcolor": "white",
+        "lncolor": "black",
+        "sync_time": True,
+        "sync_colors": False
+    },
+
+}
