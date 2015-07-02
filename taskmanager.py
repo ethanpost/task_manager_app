@@ -713,6 +713,7 @@ class Timeline():
         if y is not None:
             self.y = y
 
+        # Delete every object we are about to create here.
         self.canvas.delete(self.draw_tag)
 
         self.top = self.y
@@ -728,8 +729,10 @@ class Timeline():
                                                       self.bottom,
                                                       fill=self.colors.bgcolor,
                                                       outline=self.colors.lncolor,
-                                                      tags=(self.draw_tag, 'timelines'))
+                                                      tags=(self.draw_tag, 'timelines'),
+                                                      width=2)
 
+        # Move the object to the back.
         self.canvas.tag_lower(self.object_id)
 
         #self.canvas.delete('timeline_label_{}'.format(self.key))
@@ -943,7 +946,7 @@ class Timeline():
     def draw_line_for_current_time(self):
         # Draw blue line at current time.
         x = self._get_x_from_time(datetime.datetime.now())
-        self.canvas.create_line(x, self.top, x, self.bottom, fill='blue', tags=(self.key, self.draw_tag, self.draw_details_tag))
+        self.canvas.create_line(x, self.top, x, self.bottom, fill='blue', tags=(self.draw_details_tag, 'current_time{}'.format(self.key)))
 
     def _get_x_from_time(self, time):
         r = self.left + (bin.days_between_two_dates(time, self.begin_time) / self.total_days * self.width)
@@ -951,7 +954,6 @@ class Timeline():
 
     def get_time_from_x(self, x):
         x_as_days_from_begin_time = self.total_days * ((abs(self.left) + x) / self.width)
-        # ToDo: I don't understand why the +1 is needed here! WHY???? And only works when total days not .5!
         r = self.begin_time + datetime.timedelta(days=x_as_days_from_begin_time)
         return r
 
@@ -1104,9 +1106,11 @@ class Timeline():
             x_now = self._get_x_from_time(self.time)
             x = x_now - x_to_move_to
 
+            # Move the details only.
             self.canvas.move(self.draw_details_tag, x, 0)
             self.time = time
             self.x_moved_since_last_draw -= x
+            # Need to force a re-draw here, we are close to the end of the timeline which is painted offscreen.
             if self.x_moved_since_last_draw / self.left > .85 or self.x_moved_since_last_draw / self.right > .85:
                 self.draw()
 
