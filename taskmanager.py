@@ -507,7 +507,7 @@ class ColorPalette():
 
 class LableState():
     def __init__(self):
-        self.states = ['none', 'title', 'tag@title', 'status']
+        self.states = ['none', 'title', '@tag title', 'status']
         self.i = 0
 
     def set_state(self, state):
@@ -859,20 +859,16 @@ class Timeline():
             # Draw blue line at current time.
             self.draw_line_for_current_time()
 
-        debug(self.items)
         self.draw_items()
 
     def draw_items(self):
-
         debug('Timeline.draw_items')
         for item in self.items.iter_items_to_draw():
-            if item.group_name == self.group.group_name:
-                self.draw_item(item)
+            self.draw_item(item)
 
-    # ToDo: Change display_label to include_lab fsel
     def draw_item(self, item, x=None, y=None, tag=None):
 
-        debug('Timeline.draw_item')
+        debug('***Timeline.draw_item')
 
         # Only draw item if the item.tags contains all of timeline.tags
         # if not set(self.tags).issubset(item.tags):
@@ -928,9 +924,9 @@ class Timeline():
                 label = None
             elif self.label_state.state == 'title':
                 label = item.title
-            elif self.label_state.state == 'tag@title':
-                if len(item.tags) > 0:
-                    label = '{0}@{1}'.format(item.tags[0], item.title)
+            elif self.label_state.state == '@tag title':
+                if item.tag:
+                    label = '@{0} {1}'.format(item.tag, item.title)
                 else:
                     label = item.title
             elif self.label_state.state == 'status':
@@ -964,7 +960,7 @@ class Timeline():
         r = self.begin_time + datetime.timedelta(days=x_as_days_from_begin_time)
         return r
 
-    def _get_pct_of_height_from_y(self, y):
+    def get_pct_of_height_from_y(self, y):
         debug2('Timeline._get_pct_of_height_from_y')
         y_as_pct_of_height = abs(y - self.y) / self.height
         return y_as_pct_of_height
@@ -990,7 +986,7 @@ class Timeline():
         times = []
         all_selected_items = []
 
-        for item in self.items.all_selected_items():
+        for item in self.items.iter_items_selected():
             all_selected_items.append([item.y, item, item.x])
             times.append(item.datetime)
 
@@ -1001,16 +997,16 @@ class Timeline():
                 time = max(times)
             elif direction == 'left':
                 time = min(times)
-            for item in self.items.all_selected_items():
+            for item in self.items.iter_items_selected():
                 item.datetime = time
         elif direction == 'top':
             sorted_items = bin.sort_lists_in_list(all_selected_items, 0)
-            for item in self.items.all_selected_items():
+            for item in self.items.iter_items_selected():
                 item.y = sorted_items[0][1].y
                 item.y_as_pct_of_height = sorted_items[0][1].y_as_pct_of_height
         elif direction == 'bottom':
             sorted_items = bin.sort_lists_in_list(all_selected_items, 0)
-            for item in self.items.all_selected_items():
+            for item in self.items.iter_items_selected():
                 item.y = sorted_items[-1][1].y
                 item.y_as_pct_of_height = sorted_items[-1][1].y_as_pct_of_height
         elif direction in ('increase_vertical', 'decrease_vertical') and number_of_items > 1:
@@ -1043,7 +1039,7 @@ class Timeline():
             y = top_of_first_item
             for item in items_sorted_from_top_down:
                 rollback = (y + item[1].size > self.bottom)
-                pct_of_height = self._get_pct_of_height_from_y(y)
+                pct_of_height = self.get_pct_of_height_from_y(y)
                 rollback = pct_of_height is None or rollback
                 if rollback:
                     break
@@ -1180,30 +1176,22 @@ class Timeline():
         self._type = type
 
     def unselect_items_that_are_selected(self, redraw_affected_items=True):
-        debug('Timeline.unselect_items_that_are_selected')
-        # Set selected attribute to false for all items.
-        for item in self.items.all_items():
-            if item.selected:
-                item.selected = False
-                if redraw_affected_items:
-                    self.draw_item(item)
-        self.items.total_selected = 0
-
+        debug('*** unselect_items_that_are_selected')
+        self.items.unselect_all()
+        self.draw()
 
 class BaseItem():
     COLORS = ['white', 'grey', 'black', 'green', 'blue', 'yellow', 'red']
-
-    def __init__(self, group_name, root_folder, text, x=None, datetime=None, y=None, y_pct=None, primary_tag=None):
-        self.group_name = group_name
+    def __init__(self, root_folder, title, datetime, y_pct, tag):
         # Root folder for other files and folders.
         self._root_folder = root_folder
         # Unique 20 character key generated automatically.
         self.key = bin.random_string(20)
         # Title of item, does not need to be unique.
-        self.title = None
+        self.title = title
         # Used to store x/y position within the app at various points.
-        self.x = x
-        self._y = y
+        self.x = None
+        self._y = None
         # Used to position the item on the hourly, daily and monthly timeline.
         self._y_as_pct_of_height = y_pct
         self._backup = {}
@@ -1214,30 +1202,24 @@ class BaseItem():
         self.type = None
         self.datetime = datetime
         self.color = 'blue'
-        self._selected = False
+
         self.folder = None
         self.description = None
-        self._text = text
-        # ToDo: Sort of conflicts with the method get_primary_tag. Make clearer.
-        self.primary_tag = primary_tag
-        self._tags = []
-        # There is a getter/setter for this property. When an item is deleted it is moved to a _deleted_ folder.
-        # Will add a purge process which removes deleted items. Also needs to be some sort of automatic purge
-        # which takes place.
-        self._deleted = False
-        self._purged = False
+        self.tag = tag
+        self.tags = [tag]
+
+        # When deleted set to true. Folder will remain until item is purged. When item is purged, purged will
+        # be set to True and then background process will move the folder to __deleted__ directory.
+        self.deleted = False
+        self.purged = False
         self.hidden = False
+        self.selected = False
+
         # Stores entire status history including a datetime stamp.
         self._status = []
         # Stores only the text of the last status.
         self.status_text_only = None
         self.label_int = 0
-        # self.display_format='none'
-        self._parse_text(text)
-
-        # At a minimum title must be set, if not we just assign text to it, but this should already be done.
-        if not self.title:
-            self.title = text
 
         #self.storage_folder = '{0}_{1}'.format(bin.date_to_string(), bin.get_valid_path_name_from_string(self.title))
         self.storage_folder = os.path.join(
@@ -1248,8 +1230,8 @@ class BaseItem():
         bin.mkdir(self.storage_folder)
 
     def add_tag(self, tag):
-        if tag not in self._tags:
-            self._tags.append(tag)
+        if tag not in self.tags:
+            self.tags.append(tag)
 
     @property
     def y_as_pct_of_height(self):
@@ -1279,7 +1261,6 @@ class BaseItem():
         """
         Some housekeeping when we initially load the item from the .dat file.
         """
-        self._selected = False
         if not hasattr(self, '_y_as_pct_of_height'):
             self._y_as_pct_of_height = None
         if not hasattr(self, '_backup'):
@@ -1289,47 +1270,21 @@ class BaseItem():
             # if self.y is None:
             # self.y=10
 
-    @property
-    def text(self):
-        return self._text
+    # @property
+    # def tags(self):
+    #     return self._tags
+    #
+    # @tags.setter
+    # def tags(self, tags_list):
+    #     tags_list = bin.remove_duplicates_from_list(tags_list)
+    #     tags_list = [x.lower() for x in tags_list]
+    #     self._tags = tags_list
 
-    @text.setter
-    def text(self, text):
-        self._text = text
-        self._parse_text(text)
-
-    @property
-    def tags(self):
-        return self._tags
-
-    @tags.setter
-    def tags(self, tags_list):
-        tags_list = bin.remove_duplicates_from_list(tags_list)
-        tags_list = [x.lower() for x in tags_list]
-        self._tags = tags_list
-
-    def get_primary_tag(self):
-        if self.has_tags():
-            return self._tags[0]
-        else:
-            return None
-
-    def has_tags(self):
-        if len(self._tags) > 0:
-            return True
-        else:
-            return False
-
-    @property
-    def selected(self):
-        return self._selected
-
-    @selected.setter
-    def selected(self, tf):
-        if tf == True:
-            self._selected = True
-        else:
-            self._selected = False
+    # def has_tags(self):
+    #     if len(self._tags) > 0:
+    #         return True
+    #     else:
+    #         return False
 
     @property
     def status(self):
@@ -1348,38 +1303,6 @@ class BaseItem():
         for status in self._status:
             yield status
 
-    @property
-    def purged(self):
-        return self._purged
-
-    @purged.setter
-    def purged(self, purged_true_false):
-        if purged_true_false == True:
-            self._purged = True
-            # Save must occur before the move or it recreates the original directory defined by folder_path.
-            # self.save()
-            # debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
-            #bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
-        else:
-            # Todo: This can never happen
-            self._purged = False
-
-    @property
-    def deleted(self):
-        return self._deleted
-
-    @deleted.setter
-    def deleted(self, deleted_true_false):
-        if deleted_true_false == True:
-            self._deleted = True
-            # Save must occur before the move or it recreates the original directory defined by folder_path.
-            # self.save()
-            # debug('BaseItem: *** Moving {} to _deleted_'.format(self.folder_path))
-            #bin.mv(self.folder_path, os.path.join(self.folder_path, '..', '_deleted_'))
-        else:
-            # Todo: Need to add un-delete feature.
-            self._deleted = False
-
     def move(self, app_folder):
         None
 
@@ -1389,23 +1312,14 @@ class BaseItem():
         bin.mkdir(data_folder)
         bin.save_database2(os.path.join(data_folder, self.key), object=self)
 
-        # def load(self, dict):
-
-    # for key in dict.keys():
-    #            setattr(self, key, dict[key])
-
-    def _parse_text(self, text):
-        None
-
 
 class Link(BaseItem):
     COLORS = ['light sky blue']
 
-    def __init__(self, group_name, root_folder, text, x=None, datetime=None, y=None, y_pct=None, primary_tag=None):
-        super().__init__(group_name, root_folder, text, x, datetime, y, y_pct, primary_tag=None)
+    def __init__(self, root_folder, title, x=None, datetime=None, y=None, y_pct=None, tag=None):
+        super().__init__(root_folder, title, x, datetime, y, y_pct, tag=None)
         self.color = 'light sky blue'
         self.type = 'link'
-        # self._parse_text(self.text)
 
     def _parse_text(self, text):
         """
@@ -1413,8 +1327,6 @@ class Link(BaseItem):
 
         http://google.com <Google> [tag,tag]
         """
-
-        debug('Link._parse_text: text={}'.format(text))
         # Grab http link
         if text.find('http') > 0:
             link = text.split(' ')[0].strip()
@@ -1448,8 +1360,8 @@ class Link(BaseItem):
 class Remark(BaseItem):
     COLORS = ['yellow']
 
-    def __init__(self, group_name, root_folder, text, x=None, datetime=None, y=None, y_pct=None, primary_tag=None):
-        super().__init__(group_name, root_folder, text, x, datetime, y, y_pct, primary_tag=None)
+    def __init__(self, root_folder, title, x=None, datetime=None, y=None, y_pct=None, tag=None):
+        super().__init__(root_folder, title, x, datetime, y, y_pct, tag=None)
         self.color = 'yellow'
         self.type = 'remark'
         #self._text=text
@@ -1485,75 +1397,11 @@ class Remark(BaseItem):
 
 
 class Task(BaseItem):
-    COLORS = ['green', 'blue', 'red']
-
-    def __init__(self, group_name, root_folder, text, x=None, datetime=None, y=None, y_pct=None, primary_tag=None):
-        super().__init__(group_name, root_folder, text, x, datetime, y, y_pct, primary_tag=None)
+    def __init__(self, root_folder, title, datetime, y_pct, tag):
+        super().__init__(root_folder, title, datetime, y_pct, tag)
         self.type = 'task'
-        #self._parse_text(text)
         self.color = 'green'
-
-    @property
-    def text(self):
-        return self._text
-
-    @text.setter
-    def text(self, text):
-        self._text = text
-        self._parse_text(text)
-
-    def _parse_text(self, text):
-        """
-        Take the input text and parse out tags, title and current status.
-
-        Title <status> [tag, tag]
-        tag@Title <status> [tag,tag]
-
-        """
-        debug('Task._parse_input_text: {}'.format(text))
-
-        # Values before the first '@' are tags and should be in a comma separated list
-        # Some tags are special, like colors, only the first color will apply.
-
-        at_tag = None
-        if text.find('@') > 0:
-            tag = text.split('@')[0].strip()
-            if ' ' not in tag:
-                at_tag = tag
-                text = text.split('@')[1]
-
-        debug('! tags={0} text={1}'.format(self.tags, text))
-
-        # Status is in last set of angle brackets if it exist.
-        if text.rfind('<') > 0:
-            b = text.rfind('<')
-            e = text.rfind('>')
-            if b < e:
-                self._status = text[b + 1:e]
-                text = text[0:b] + text[e + 1:]
-
-        # Everything in last set of brackets are tags.
-        are_tags = []
-        if text.rfind('['):
-            b = text.rfind('[')
-            e = text.rfind(']')
-            if b < e:
-                are_tags = text[b + 1:e].split(',')
-                are_tags = [t.strip() for t in are_tags]
-                for t in are_tags:
-                    if ' ' in t:
-                        # Tags with blanks are not valid. These are probably not tags.
-                        are_tags = []
-                if len(are_tags) > 0:
-                    text = text[0:b] + text[e + 1:]
-
-        if at_tag:
-            are_tags.append(at_tag)
-        self.tags = are_tags
-
-        debug('! tags={0} text={1}'.format(self.tags, text))
-
-        self.title = text
+        self.tag = tag
 
 
 class Items():
@@ -1580,60 +1428,67 @@ class Items():
                     d = bin.open_database2(file.replace('.dat', ''))
                     debug('Adding item to Items.items, {}'.format(d.title))
                     self.items[key] = d
+                    d.selected = False
                     d.patch()
-
-        # if the item is not shared and not the same version, patch it and save
-        # if the item is shared and the version does not match mark it as read only
-        # items should have a save all and each item should also have a save
-
-        # should add a load for above with a directory name, then we can add
-        # directories to the timeline and use the same items class.
-
-        self._total_selected = 0
 
         self.patch()
 
-    def add_item(self, group_name, item_type, text, y_pct, datetime, primary_tag):
+    def get_popup_form_text_tuple(self, form_text):
+        # @tag Shopping List
+        # Shopping List (should get default tag).
+        #
+        t = form_text.strip()
+        if t[:1] == "@":
+            item_tag = t.split(' ', 1)[0][1:]
+            item_title = t.split(' ', 1)[1]
+        else:
+            item_tag = None
+            item_title = t
 
-        debug('Items.add_item')
+        debug('*** tag={} text={}'.format(item_tag, item_title))
+
+        return (item_tag, item_title)
+
+    def add_item_from_popup_form(self, form_text, y_pct, datetime):
+
+        debug('Items.add_item_from_popup_form')
 
         """ Create a new item associated with the given timeline group. """
 
-        # Note, we can't pass group here because we won't be able to pickle the item object easily. So we use
-        # group_name instead.
+        item_tag, item_title = self.get_popup_form_text_tuple(form_text)
+
+        item_type = 'Task'
 
         if item_type == 'link':
-            item = Link(group_name=group_name, root_folder=self.folder_path, text=text, datetime=datetime, y_pct=y_pct)
+            item = Link(root_folder=self.folder_path, title=item_title, datetime=datetime, y_pct=y_pct)
         elif item_type == 'remark':
-            item = Remark(group_name=group_name, root_folder=self.folder_path, text=text, datetime=datetime, y_pct=y_pct)
+            item = Remark(root_folder=self.folder_path, title=item_title, datetime=datetime, y_pct=y_pct)
         else:
-            item = Task(group_name=group_name, root_folder=self.folder_path, text=text, datetime=datetime, y_pct=y_pct,
-                        primary_tag=primary_tag)
+            item = Task(root_folder=self.folder_path,
+                        title=item_title,
+                        datetime=datetime,
+                        y_pct=y_pct,
+                        tag=item_tag)
 
         # Store a reference in Items.items.
         self.items[item.key] = item
         item.save()
 
         # Rebuild the list of unique tags for self.tags.
-        if primary_tag:
-            if primary_tag not in self.tags:
-                self.tags.append(primary_tag)
+        if item_tag:
+            if item_tag not in self.tags:
+                self.tags.append(item_tag)
 
     def delete_selected_items(self):
         debug('Items.delete_selected_items')
-        for item in self.iter_selected_items():
+        for item in self.iter_items_selected():
             item.deleted = True
         self.save()
-        # Some tags may no longer be used, therefore rebuild the tags list.
-        self.tags = []
-        for item in self.items:
-            # ToDo: hasattr is for patching only.
-            if hasattr(item, 'primary_tag') and item.primary_tag and item.primary_tag not in self.tags:
-                self.tags.append(item.primary_tag)
+        # ToDo: self.refresh_tags
 
     def hide_selected_items(self):
         debug('Items.hide_selected_items')
-        for item in self.iter_selected_items():
+        for item in self.iter_items_selected():
             item.hidden = True
 
     def get_next_display_mode(self):
@@ -1654,14 +1509,6 @@ class Items():
         #for item in self.all_items():
         #    None
 
-    @property
-    def total_selected(self):
-        return self._total_selected
-
-    @total_selected.setter
-    def total_selected(self, total_selected):
-        self._total_selected = total_selected
-
     def iter_items_to_draw(self):
         debug('Items.iter_items_to_draw')
         for item in self.items.values():
@@ -1672,18 +1519,14 @@ class Items():
             elif not item.deleted and not item.hidden and self.display_mode == 'default':
                 yield item
 
+    def iter_items_selected(self):
+        debug('Items.iter_items_selected')
+        for item in self.items.values():
+            if item.selected:
+                yield item
+
     def all_items(self):
         return self.items.values()
-
-    def iter_selected_items(self):
-        for item in self.all_items():
-            if item.selected:
-                yield item
-
-    def all_selected_items(self):
-        for item in self.all_items():
-            if item.selected:
-                yield item
 
     def get_by_key(self, key):
         try:
@@ -1707,19 +1550,25 @@ class Items():
         """
         Mark an item as selected.
         """
-        if item and not item.selected:
-            item.selected = True
-            self._total_selected += 1
-            debug('*** total_selected={}'.format(self._total_selected))
+        item.selected = True
 
     def unselect(self, item):
-        """
-        Mark an item as unselected.
-        """
-        if item.selected:
-            item.selected = False
-            self._total_selected -= 1
-            debug('*** total_selected={}'.format(self._total_selected))
+        #debug("**** self.items={}".format(self.items))
+        item.selected = False
+
+    def unselect_all(self):
+        debug("*** self.items={}".format(self.items))
+        for item_key, item in self.items.items():
+            if item.selected:
+                item.selected = False
+
+    @property
+    def total_selected(self):
+        i = 0
+        for item_key, item in self.items.items():
+            if item.selected:
+                i += 1
+        return i
 
     def _update_count(self):
         self.group_count = len(self.groups)
@@ -1839,6 +1688,7 @@ class Group():
 class Dragging():
     def __init__(self):
         self.dragging = False
+        self.allow_drag = True
         self.item = None
         self.object_id = None
         self.coords = None
@@ -1868,7 +1718,6 @@ class Dragging():
             return True
         else:
             return False
-
 
 
 class TaskManager():
@@ -2331,6 +2180,10 @@ class TaskManager():
 
     def _keypress_delete(self):
         debug('TaskManager._keypress_delete')
+        timeline = self._get_timeline_from_mouse_position()
+        if timeline:
+            timeline.items.delete_selected_items()
+
         # Todo: At the moment you can delete deleted items, delete should in fact purge here.
         self.delete_selected_items()
 
@@ -2345,6 +2198,7 @@ class TaskManager():
         if timeline:
             timeline.label_state.next_state()
             timeline.draw()
+            self.statusbox.text=timeline.label_state.state
         else:
             debug('ERROR: timeline not found!')
 
@@ -2436,10 +2290,11 @@ class TaskManager():
     def select_item(self, item, timeline, object_id):
         # This could end up calling an unselect_all so make sure this line is before the select.
         timeline.items.select(item)
+        #debug('*** object_id={}'.format(object_id))
         self.add_tag(object_id=object_id, tag='TAG_SELECTED')
 
     def _item_mouse_down(self, event):
-        debug('TaskManager._item_mouse_down')
+        debug('*** TaskManager._item_mouse_down')
 
         # Will not need to re-draw on mouse down since this will trigger a mouse up.
 
@@ -2448,34 +2303,42 @@ class TaskManager():
         if not item:
             return
 
-        allow_drag = True
+        self.dragging.allow_drag = True
 
         timeline.items.selected_timeline = timeline
 
         if timeline.items.total_selected == 0:
+            debug('*** 1')
             self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected == 1 and not self.keyboard.control_key_down:
             if not item.selected:
+                debug('*** 2')
                 self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=timeline)
                 self.select_item(item, timeline, object_id)
-                allow_drag = False
+                self.dragging.allow_drag = False
             else:
+                debug('*** 3')
                 self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=timeline)
         elif timeline.items.total_selected >= 1 and self.keyboard.control_key_down:
-            allow_drag = False
+            self.dragging.allow_drag = False
             if item.selected:
-                timeline.items.unselect(item)
+                debug('*** 4')
+                self.unselect_item(item, object_id, timeline)
             else:
+                debug('*** 5')
                 self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected > 1 and not self.keyboard.control_key_down and not item.selected:
+            debug('*** 6')
+            #self.dragging.allow_drag = False
             self.unselect_items_that_are_selected(redraw_affected_items=True, timeline=timeline)
             self.select_item(item, timeline, object_id)
+            #timeline.draw_item(item)
 
             # Shift-Delete should purge all selected items.
             # Space-bar should hide or unhide all selected items.
             # Space-bar should undelete all selected items.
 
-        if allow_drag:
+        if self.dragging.allow_drag:
             self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self.dragging.item = item
@@ -2497,10 +2360,10 @@ class TaskManager():
                 if time and item:
                     if item.type in ('link', 'remark'):
                         text = item.title
-                    elif item.has_tags():
-                        text = '{0}@{1} <{2}>'.format(item.get_primary_tag(), item.title, item.status)
+                    elif item.tag:
+                        text = '@{0} {1} <{2}>'.format(item.tag, item.title, item.status)
                     else:
-                        text = '{0}@{1} <{2}>'.format('', item.title, item.status)
+                        text = '{1} <{2}>'.format('', item.title, item.status)
                     self._display_time_with_text(time, text)
                 else:
                     debug('No coord time!')
@@ -2508,11 +2371,11 @@ class TaskManager():
                 debug2('No object id!')
 
     def _item_mouse_drag(self, event):
-        #debug('TaskManager._item_mouse_drag')
+        debug('*** TaskManager._item_mouse_drag')
 
         self.mouse = (event.x, event.y)
 
-        if self.dragging.is_dragging_item():
+        if self.dragging.is_dragging_item() and self.dragging.allow_drag:
             debug('_item_mouse_drag')
             object_id = self.dragging.object_id
             coords = self.canvas.coords(object_id)
@@ -2524,9 +2387,11 @@ class TaskManager():
             self.dragging.x = event.x
             self.dragging.y = event.y
             self.canvas.move('TAG_SELECTED', delta_x, delta_y)
-            if timeline and timeline.items.total_selected == 1:
+            if self.dragging.timeline.items.total_selected == 1:
+                debug('***X')
                 self.canvas.move('{}_LABEL_TAG'.format(object_id), delta_x, delta_y)
             else:
+                debug('***Z')
                 self.canvas.move('LABEL_SELECTED', delta_x, delta_y)
 
     def _get_xy_from_object_id(self, object_id):
@@ -2545,6 +2410,11 @@ class TaskManager():
         self.mouse = (event.x, event.y)
 
         object_id, item, timeline, time, taskbar_group = self._get_xy(event.x, event.y, use_object_coords=True)
+
+        if not object_id and timeline:
+            return
+
+        #debug('*** object_id={}'.format(object_id))
 
         delta_x = 0
         delta_y = 0
@@ -2569,9 +2439,8 @@ class TaskManager():
                     key = self._get_item_key_from_object_id(object_id)
                     if key:
                         item = timeline.items.get_by_key(key)
-                        item.group_name = timeline.group_name
                         item.datetime = timeline.get_time_from_x(x)
-                        item.y_as_pct_of_height = timeline._get_pct_of_height_from_y(y)
+                        item.y_as_pct_of_height = timeline.get_pct_of_height_from_y(y)
                         item.tags = []
                         item.save()
                 self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=self.dragging.timeline)
@@ -2600,8 +2469,7 @@ class TaskManager():
             else:
                 f = ItemForm(root=self.root, theme=self.theme, item=item, cbfunc=(lambda dict: self.callback(dict)))
         elif item.type == 'remark':
-            self._timeline_disable_window()
-            if item.has_tags():
+            if item.tag():
                 text = '{0} [{1}]'.format(item.title.rstrip(), ','.join(item.tags))
             else:
                 text = item.title
@@ -2614,7 +2482,6 @@ class TaskManager():
                 item.text = f.text
                 item.save()
                 timeline.draw()
-            self._timeline_enable_window()
             self.canvas.focus_force()
         elif item.type == 'link':
             if self.keyboard.shift_key_down:
@@ -2658,7 +2525,7 @@ class TaskManager():
 
     def _purge_selected_items(self, redraw=False):
         debug('TaskManager._purge_selected_items')
-        for item in self.items.all_selected_items():
+        for item in self.items.iter_items_selected():
             item.purged = True
             debug('purged item!')
             if redraw:
@@ -2738,61 +2605,35 @@ class TaskManager():
             # In theory ending up here is impossible.
             self.dragging = None
 
-    def _timeline_disable_window(self):
-        self.theme.enabled = False
-        self.draw()
-
-    def _timeline_enable_window(self):
-        self.theme.enabled = True
-        self.draw()
-        self.canvas.focus_force()
-
     def _timeline_mouse_click_add_item(self, x, y):
         """
         Present user with an input box and create a new item on the timeline.
         """
 
-        #debug('_timeline_mouse_click_add_item')
+        debug('_timeline_mouse_click_add_item')
         timeline = self._get_timeline_from_xy(x, y)
 
         if not timeline:
             return
 
-        y_pct = timeline._get_pct_of_height_from_y(y)
+        y_pct = timeline.get_pct_of_height_from_y(y)
         t = timeline.get_time_from_x(x)
-
-        # ToDo: Can this just be a partially transparent rectangle?
-        self._timeline_disable_window()
 
         form = modalinputbox.ModalInputBox(
             root=self.root,
             canvas=self.canvas,
-            text=''
+            text='',
+            font=self.theme.font_name
         )
 
         if form.text:
-            debug('form.text={}'.format(form.text))
-            # ToDo: This section likely needs to go someplace else.
-            # Strip leading and trailing blanks from test.
-            text = form.text.strip()
-            #If primary tag has been supplied the line will begin with @.
-            if text[0:1] == '@':
-                # Get the first word after the @.
-                tag = text[1:].split(' ')[0]
-                # Now remove the tag entirely from the text string.
-                if len(text.split(' ', 1)) > 1:
-                    text = text.split(' ', 1)[1]
-                else:
-                    text = tag
-            else:
-                tag = None
+            timeline.items.add_item_from_popup_form(form_text=form.text.strip(),
+                                                    y_pct=y_pct,
+                                                    datetime=t)
 
-            # item_type = get_item_type_from_text(form.text)
+        self.draw()
 
-            timeline.items.add_item(group_name=timeline.group.group_name, item_type='task', text=form.text, y_pct=y_pct,
-                                    datetime=t, primary_tag=tag)
-
-        self._timeline_enable_window()
+        self.canvas.focus_force()
 
     def _timeline_mouse_doubleclick(self, event):
         #debug('TaskManager._timeline_mouse_doubleclick')
@@ -2857,7 +2698,7 @@ class TaskManager():
             self.canvas.delete('selectbox')
             t = self._get_timeline_from_xy(event.x, event.y)
             # Only works if the start and stop of the drag are on the same timeline.
-            if t.key == self.dragging.timeline.key:
+            if t and t.key == self.dragging.timeline.key:
                 # Get a list of all of the objects enclosed by the rectangle.
                 oids = self.canvas.find_enclosed(x, y, x1, y1)
                 for oid in oids:
@@ -2879,7 +2720,8 @@ class TaskManager():
                 # self._dragging['timeline'].unselect_all(draw=True)
 
         # Always be sure we are drawing current time when there is a timeline mouse up event.
-        t.group.disable_drawing_current_time = False
+        if self.dragging.timeline:
+            self.dragging.timeline.group.disable_drawing_current_time = False
         self.dragging = None
         self.dragging = Dragging()
         self.draw()
@@ -2889,6 +2731,11 @@ class TaskManager():
         for t in self.visible_timelines():
             t.draw_line_for_current_time()
 
+    def unselect_item (self, item, object_id, timeline):
+        self.canvas.dtag(object_id, 'TAG_SELECTED')
+        item.selected = False
+        timeline.draw_item(item)
+
     def unselect_items_that_are_selected(self, redraw_affected_items, timeline):
         debug('TaskManager.unselect_items_that_are_selected')
 
@@ -2897,7 +2744,11 @@ class TaskManager():
             self.canvas.dtag(object_id, 'TAG_SELECTED')
 
         if timeline:
-            timeline.unselect_items_that_are_selected(redraw_affected_items=redraw_affected_items)
+            for item in timeline.items.iter_items_selected():
+                item.selected = False
+                timeline.draw_item(item)
+            #timeline.items.unselect_all()
+            #timeline.unselect_items_that_are_selected(redraw_affected_items=redraw_affected_items)
 
             #if self.last_timeline_clicked:
             #self.last_timeline_clicked.unselect_all(draw=draw)
