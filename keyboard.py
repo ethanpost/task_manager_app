@@ -33,7 +33,7 @@ class Keyboard():
         self.canvas.bind("<KeyRelease>", self._keyrelease)
 
     def _keypress(self, event):
-        debug('Keyboard._keypress: state={0} keycode={1} keysym={2}'.format(event.state, event.keycode, event.keysym))
+        # debug('Keyboard._keypress: state={0} keycode={1} keysym={2}'.format(event.state, event.keycode, event.keysym))
 
         # StateS: 9=Shift Key Down, 10=Caps-Lock
         if event.state in (8, 9, 11, 10):
@@ -61,7 +61,7 @@ class Keyboard():
             self.cbfunc({'cbkey': self.KEYPRESS, 'state': event.state, 'keycode': event.keycode, 'key': event.keysym})
 
     def _keyrelease(self, event):
-        #debug('Keyboard._keyrelease: state={0} keycode={1}'.format(event.state, event.keycode))
+        # debug('Keyboard._keyrelease: state={0} keycode={1}'.format(event.state, event.keycode))
         if event.keycode == 16:
             self.shift_key_down = False
             debug('Shift key is up!')

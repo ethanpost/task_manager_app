@@ -1,4 +1,3 @@
-
 import tkinter as tk
 from debug import debug as debug, critical as error
 # from debug import dump as dump_debug
@@ -24,12 +23,12 @@ class App(tk.Tk):
         self.theme = theme.Theme()
         self.theme.font_name = "Courier"
         self.theme.background_color = 'white'
-        
+
         self.canvas = tk.Canvas(self, background=self.theme.background_color, bd=0, height=600, width=950,
                                 highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=False)
 
-        #folder = os.path.join(bin.application_root_folder(), 'items')
+        # folder = os.path.join(bin.application_root_folder(), 'items')
         #bin.mkdir(folder)
         # Create an items object.
         #self.items = taskmanager.Items(folder=folder)
@@ -39,10 +38,10 @@ class App(tk.Tk):
         self.tm = taskmanager.TaskManager(root=self, canvas=self.canvas, theme=self.theme)
 
 
-        
-#        folder=os.path.join(bin.application_root_folder(), 'items2')
-#        bin.mkdir(folder)
-#        self.items2=taskmanager.Items(folder=folder)
+
+        #        folder=os.path.join(bin.application_root_folder(), 'items2')
+        #        bin.mkdir(folder)
+        #        self.items2=taskmanager.Items(folder=folder)
 
         #self.sb=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
         #self.sb2=statusbox.StatusBox(root=self, canvas=self.canvas, theme=self.theme)
@@ -77,10 +76,12 @@ class App(tk.Tk):
         self.tm.update_background_tasks()
         self.after(10000, self.update_background_tasks)
 
+
 def RunApp():
     app = App()
     app.after(10000, app.update_background_tasks)
     app.mainloop()
+
 
 def RunAppReset():
     shutil.rmtree(os.path.join(bin.application_root_folder(), 'taskrx'))
@@ -90,8 +91,9 @@ def RunAppReset():
     app = App()
     app.mainloop()
 
+
 if __name__ == "__main__":
-    #cProfile.run('RunApp()', filename='C:\\task_manager_app\\foo.dat')
+    # cProfile.run('RunApp()', filename='C:\\task_manager_app\\foo.dat')
     #RunAppReset()
     RunApp()
 

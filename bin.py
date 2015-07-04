@@ -204,7 +204,7 @@ def get_valid_path_name_from_string(string):
 def to_char(t=datetime.datetime.now(), f='%H:%M'):
     """Return a string from a date using the format specified."""
     # f='%c'
-    #f='%a %b %d %I:%M %p'
+    # f='%a %b %d %I:%M %p'
     return datetime.datetime.strftime(t, f)
 
 
@@ -266,11 +266,13 @@ def open_database(
     debug2('open_database: r={}'.format(r))
     return r
 
+
 def if_database(file_path):
     if os.path.isfile('{}.dat'.format(file_path)):
         return True
     else:
         return False
+
 
 def save_database(
         name,
