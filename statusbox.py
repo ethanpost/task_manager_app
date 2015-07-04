@@ -14,19 +14,17 @@ from collections import OrderedDict
 class StatusBox():
     object_type = 'statusbox'
 
-    def __init__(self, root, canvas, theme):
+    def __init__(self, root, canvas, font):
         # debug('StatusBox')
 
         self.root = root
         self.canvas = canvas
-        self.theme = theme
+        self.font = font
         self._y = 0
         self._height = 18
         self.bottom = None
         self.width = None
         self.x = None
-        # The font_size can be a number which is a specific font size of it can be one or more "<" or ">"'s which are
-        # used to adjust the size from the base font size using the theme class.
         self.font_size = None
         self.object_id = None
         self._text = None
@@ -63,7 +61,7 @@ class StatusBox():
         self.clear()
         if text:
             self.object_id = self.canvas.create_text(self.x, self.y, text=text,
-                                                     font=self.theme.font(size=self.font_size),
+                                                     font=self.font.get_font(),
                                                      fill="black", anchor="nw", justify="left")
 
     def clear(self):

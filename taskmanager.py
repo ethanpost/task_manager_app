@@ -320,7 +320,6 @@ class TagBox():
 
         for tag in self.tags:
 
-
             text_id = self.canvas.create_text(self.next_tag_x, self.next_tag_y, font=self.theme.font(size='<'),
                                               text=tag, anchor='w', fill=self.theme.font_color,
                                               tags=('tagbox', 'tagbox_{}'.format(tag)))
@@ -350,6 +349,39 @@ class TagBox():
                                                       outline='black', tags='TagBox')
 
 
+class Fonts():
+    def __init__(self, font_name, font_size=12):
+        self.fonts_list = ['Arial', 'Courier']
+        self.i = 0
+        self.max_i = len(self.fonts_list)-1
+        self.set_font(font_name)
+        self.font_size = font_size
+        
+    def set_font(self, font_name):
+        self.i = self.fonts_list.index(font_name)
+
+    def next_font(self):
+        self.i += 1
+        if self.i > self.max_i:
+            self.i = 0
+        return self.fonts_list[self.i]
+
+    def last_font(self):
+        self.i -= 1
+        if self.i < 0:
+            self.i = self.max_i
+        return self.fonts_list[self.i]
+
+    def get_font(self):
+        return (self.fonts_list[self.i], self.font_size)
+
+    def get_small_font(self):
+        return (self.fonts_list[self.i], self.font_size-2)
+
+    def get_large_font(self):
+        return (self.fonts_list[self.i], self.font_size+2)
+
+        
 class Colors():
     def __init__(self, color):
         self.colors_list = ['white', 'snow', 'ghost white', 'white smoke', 'gainsboro', 'floral white', 'old lace',
@@ -528,11 +560,76 @@ class LableState():
         return self.states[self.i]
 
 
+class ItemUI():
+    def __init__(self, canvas, x, y, font, item_key):
+        self.canvas = canvas
+        self.x = x
+        self.y = y
+        self.item_width = 8
+        self.item_height = 8
+        self.border_width = 1
+        self.fill_color = 'green'
+        self.outline_color = 'black'
+        self.item_object_id = None
+        self.label_object_id = None
+        self.item_selected_id = None
+        self.font = font
+        self.label_tags = []
+        self.item_key = item_key
+        self.item_tags = ['ItemUI', 'ItemKey={}'.format(self.item_key)]
+
+    def draw_item(self):
+        self.item_object_id = self.canvas.create_rectangle(
+            self.x,
+            self.y,
+            self.x + self.item_width,
+            self.y + self.item_height,
+            fill=self.fill_color,
+            outline=self.outline_color,
+            tags=tuple(self.item_tags),
+            stipple=None,
+            width=self.border_width,
+            dash=None)
+
+    def draw_label(self, label_text):
+        self.label_tags.append('{}_LABEL_TAG'.format(self.item_object_id))
+        x, y, x1, y1 = self.canvas.coords(self.item_object_id)
+        self.label_object_id = self.canvas.create_text(
+            x+self.item_width+5,
+            y+(self.item_height/2),
+            text=label_text,
+            font=self.font.get_font(),
+            fill="black",
+            tags=tuple(self.label_tags),
+            anchor="w",
+            justify="right")
+
+    def draw_selected(self):
+        x, y, x1, y1 = self.canvas.coords(self.item_object_id)
+        self.item_selected_id = self.canvas.create_rectangle(
+            x-2,
+            y-2,
+            x1+2,
+            y1+2,
+            fill='',
+            outline=self.outline_color,
+            tags=self.item_tags,
+            stipple=None,
+            width=1,
+            dash=(1, 2))
+
+    def add_tag_to_item(self, tag):
+        self.item_tags.append(tag)
+
+    def add_tag_to_label(self, tag):
+        self.label_tags.append(tag)
+
+
 class Timeline():
     _timeline_types = ['hourly', 'daily', 'monthly']
     object_type = 'timeline'
 
-    def __init__(self, key, group, theme, statusbox, keyboard, canvas, timeline_type,
+    def __init__(self, key, group, font, statusbox, keyboard, canvas, timeline_type,
                  time=datetime.datetime.now(), draw_labels=True):
 
         self.key = key
@@ -597,7 +694,7 @@ class Timeline():
         self.draw_details_tag = 'draw_details{}'.format(self.key)
 
         self.canvas = canvas
-        self.theme = theme
+        self.font = font
 
         self.group = group
         self.group_name = group.group_name
@@ -764,11 +861,12 @@ class Timeline():
 
         if delete:
             self.canvas.delete(self.draw_details_tag)
+            debug('**** deleted canvas details')
 
         # The red line needs to be redrawn every time.
         self.canvas.delete('red' + self.draw_details_tag)
 
-        font_size = '<<'
+       # font_size = '<<'
 
         self.total_days = self.days_displayed * 5
 
@@ -794,9 +892,22 @@ class Timeline():
         for i in range(1, 500):
 
             label_text = bin.to_char(label_time, self.types[self.type]['label_format'])
-            self.canvas.create_line(x, self.top, x, self.bottom, fill=self.colors.lncolor, tags=(self.draw_details_tag))
-            self.canvas.create_text(x + 3, self.bottom - 8, font=self.theme.font(size=font_size), text=label_text,
-                                    anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
+            self.canvas.create_line(
+                x,
+                self.top,
+                x,
+                self.bottom,
+                fill=self.colors.lncolor,
+                tags=(self.draw_details_tag))
+
+            self.canvas.create_text(
+                x + 3,
+                self.bottom - 8,
+                font=self.font.get_font(),
+                text=label_text,
+                anchor='w',
+                fill=self.colors.lncolor,
+                tags=(self.draw_details_tag))
 
             if i == 2:
                 span = x - first_x
@@ -807,7 +918,7 @@ class Timeline():
                         minute_time = label_time + datetime.timedelta(days=i * 15 / 1440)
                         x = self._get_x_from_time(minute_time)
                         self.canvas.create_line(x, self.top, x, self.bottom, fill=self.colors.lncolor, tags=(self.draw_details_tag))
-                        self.canvas.create_text(x + 3, self.top + 8, font=self.theme.font(size=font_size),
+                        self.canvas.create_text(x + 3, self.top + 8, font=self.font.get_font(),
                                                 text=str(i * 15), anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
                 label_time = label_time + datetime.timedelta(hours=1)
             elif self.type == 'daily':
@@ -816,7 +927,7 @@ class Timeline():
                         hourly_time = label_time + datetime.timedelta(hours=i)
                         x = self._get_x_from_time(hourly_time)
                         self.canvas.create_line(x, self.top, x, self.bottom, fill=self.colors.lncolor, tags=(self.draw_details_tag))
-                        self.canvas.create_text(x + 3, self.top + 8, font=self.theme.font(size=font_size), text=str(i),
+                        self.canvas.create_text(x + 3, self.top + 8, font=self.font.get_font(), text=str(i),
                                                 anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
                 label_time = label_time + datetime.timedelta(hours=24)
             elif self.type == 'monthly':
@@ -825,7 +936,7 @@ class Timeline():
                         daily_time = label_time + datetime.timedelta(hours=i * 24)
                         x = self._get_x_from_time(daily_time)
                         self.canvas.create_line(x, self.top, x, self.bottom, fill=self.colors.lncolor, tags=(self.draw_details_tag))
-                        self.canvas.create_text(x + 3, self.top + 8, font=self.theme.font(size=font_size),
+                        self.canvas.create_text(x + 3, self.top + 8, font=self.font.get_font(),
                                                 text=str(i + 1), anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
                 label_time = self._get_next_month(label_time)
             elif self.type == 'monthly2':
@@ -837,9 +948,9 @@ class Timeline():
                         l = bin.to_char(t, '%d')
                         l2 = bin.to_char(t, '%a')
                         self.canvas.create_line(x, self.top, x, self.bottom, fill=self.colors.lncolor, tags=(self.draw_details_tag))
-                        self.canvas.create_text(x + 3, self.top + 8, font=self.theme.font(size=font_size), text=str(l),
+                        self.canvas.create_text(x + 3, self.top + 8, font=self.font.get_font(), text=str(l),
                                                 anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
-                        self.canvas.create_text(x + 3, self.top + 20, font=self.theme.font(size=font_size), text=l2,
+                        self.canvas.create_text(x + 3, self.top + 20, font=self.font.get_font(), text=l2,
                                                 anchor='w', fill=self.colors.lncolor, tags=(self.draw_details_tag))
                 label_time = self._get_next_month(label_time)
 
@@ -890,55 +1001,21 @@ class Timeline():
         else:
             item.y = self.y + (self.height * item.y_as_pct_of_height)
 
-        unique_id = '{0}_{1}'.format(self.key, item.key)
-        key = 'key={}'.format(item.key)
-        tags = '{0} {1} {2} {3} {4} {5}'.format(key, 'BaseItem', item.key, unique_id, self.key, self.draw_details_tag)
+        itemui = ItemUI(canvas=self.canvas, x=item.x, y=item.y, font=self.font, item_key=item.key)
+        itemui.add_tag_to_item(self.draw_details_tag)
+        itemui.add_tag_to_label(self.draw_details_tag)
 
-        #debug('x={0} y={1}'.format(item.x, item.y))
-
-        self.canvas.delete(unique_id)
-
-        label_tags = tags
-        #if item.selected and self.highlight_selected:
         if item.selected and self.items.selected_timeline and self.items.selected_timeline.key == self.key:
-            border_width = 2
-            outline_color = 'black'
-            dash = (1, 2)
-            tags += ' TAG_SELECTED'
-            label_tags += ' LABEL_SELECTED'
+            itemui.add_tag_to_label('LABEL_SELECTED')
+            itemui.add_tag_to_item('TAG_SELECTED')
+            itemui.draw_item()
+            itemui.draw_selected()
         else:
-            border_width = 1
-            outline_color = 'black'
-            dash = None
+            itemui.draw_item()
 
+        itemui.draw_label(item.title)
 
-        object_id = self.canvas.create_rectangle(item.x, item.y, item.x + item.size, item.y + item.size,
-                                                 fill=item.color, outline=outline_color, tags=tags, stipple=None,
-                                                 width=border_width, dash=dash)
-
-        label_tags += ' {}_LABEL_TAG'.format(object_id)
-        # label_tags = tags
-        # Labels are not drawn on every timeline.
-        if self.draw_labels:
-            if self.label_state.state == 'none':
-                label = None
-            elif self.label_state.state == 'title':
-                label = item.title
-            elif self.label_state.state == '@tag title':
-                if item.tag:
-                    label = '@{0} {1}'.format(item.tag, item.title)
-                else:
-                    label = item.title
-            elif self.label_state.state == 'status':
-                if item.status is not None:
-                    label = item.status
-                else:
-                    label = item.title
-            x, y, right, bottom = self.canvas.coords(object_id)
-            self.canvas.create_text(right + 5, y - 2, text=label, font=self.theme.font(size='<<'), fill="black",
-                                    tags=label_tags, anchor="nw", justify="left")
-
-        return object_id
+        #debug('*** item tags {}'.format(itemui.item_tags))
 
     def draw_line_for_current_time(self):
         # Draw blue line at current time. This is disabled during timeline drag events.
@@ -1483,7 +1560,7 @@ class Items():
         debug('Items.delete_selected_items')
         for item in self.iter_items_selected():
             item.deleted = True
-        self.save()
+            item.save()
         # ToDo: self.refresh_tags
 
     def hide_selected_items(self):
@@ -1532,6 +1609,7 @@ class Items():
         try:
             item = self.items[key]
         except:
+            debug('*** ERROR: get_by_key {} {}'.format(self.items, key))
             item = None
         return item
 
@@ -1543,8 +1621,8 @@ class Items():
         del self.items[key]
 
     def save(self):
-        for item in self.all_items():
-            item.save_groups()
+        for item_key, item in self.items.items:
+           item.save()
 
     def select(self, item):
         """
@@ -1575,11 +1653,11 @@ class Items():
 
 
 class Group():
-    def __init__(self, group_directory, group_theme, group_statusbox, group_keyboard, group_canvas):
+    def __init__(self, group_directory, group_font, group_statusbox, group_keyboard, group_canvas):
         self.key = bin.random_string(20)
         self.colorpalette = ColorPalette()
         self.directory = group_directory
-        self.theme = group_theme
+        self.font = group_font
         self.statusbox = group_statusbox
         self.keyboard = group_keyboard
         self.canvas = group_canvas
@@ -1606,7 +1684,7 @@ class Group():
     def add_timeline(self, key=None):
         if not key:
             key = bin.random_string(20)
-        t = Timeline(key=key, group=self, theme=self.theme, statusbox=self.statusbox,
+        t = Timeline(key=key, group=self, font=self.font, statusbox=self.statusbox,
                      keyboard=self.keyboard, timeline_type='daily', canvas=self.canvas)
         self.timelines.append(t)
         return t
@@ -1726,11 +1804,12 @@ class TaskManager():
         self.root = root
         self.canvas = canvas
         self.theme = theme
+        self.font = Fonts(font_name='Arial', font_size=9)
         # Stores a reference to each timeline object.
         self.timelines = []
         self.colors = Colors('white')
 
-        self.statusbox = statusbox.StatusBox(root=self.root, canvas=self.canvas, theme=self.theme)
+        self.statusbox = statusbox.StatusBox(root=self.root, canvas=self.canvas, font=self.font)
 
         self.drawers = []
         self.bottom = 0
@@ -1779,7 +1858,7 @@ class TaskManager():
 
     def load(self):
         for group_folder in self.all_group_folders:
-            g = Group(group_directory=group_folder, group_theme=self.theme, group_statusbox=self.statusbox,
+            g = Group(group_directory=group_folder, group_font=self.font, group_statusbox=self.statusbox,
                       group_keyboard=self.keyboard, group_canvas=self.canvas)
             self.groups.append(g)
         for t in g.timelines:
@@ -1794,7 +1873,7 @@ class TaskManager():
     def get_new_timeline(self, group):
         timeline = None
         if group.timeline_count < 3:
-            timeline = Timeline(key=bin.random_string(20), group=group, theme=self.theme, statusbox=self.statusbox,
+            timeline = Timeline(key=bin.random_string(20), group=group, font=self.font, statusbox=self.statusbox,
                                 keyboard=self.keyboard, timeline_type='daily', y=self.bottom, height=100,
                                 time=datetime.datetime.now(), canvas=self.canvas, draw_labels=True)
             self.timelines.append(timeline)
@@ -1803,7 +1882,6 @@ class TaskManager():
         else:
             self.statusbox.text = 'Only 3 timelines are allowed for each group.'
         return timeline
-
 
     def draw(self, x=None, y=None, width=None):
 
@@ -1836,12 +1914,12 @@ class TaskManager():
         self.canvas.tag_bind("timelines", "<Double-1>", self._timeline_mouse_doubleclick)
         self.canvas.bind_all("<MouseWheel>", self._timeline_mouse_wheel)
 
-        self.canvas.tag_bind("BaseItem", "<ButtonPress-1>", self._item_mouse_down)
-        self.canvas.tag_bind("BaseItem", "<B1-Motion>", self._item_mouse_drag)
-        self.canvas.tag_bind("BaseItem", "<Motion>", self._item_mouse_over)
-        self.canvas.tag_bind("BaseItem", "<ButtonRelease-1>", self._item_mouse_up)
-        self.canvas.tag_bind("BaseItem", "<Double-1>", self._item_mouse_doubleclick)
-        self.canvas.tag_bind("BaseItem", "<Button-3>", self._show_item_menu)
+        self.canvas.tag_bind("ItemUI", "<ButtonPress-1>", self._item_mouse_down)
+        self.canvas.tag_bind("ItemUI", "<B1-Motion>", self._item_mouse_drag)
+        self.canvas.tag_bind("ItemUI", "<Motion>", self._item_mouse_over)
+        self.canvas.tag_bind("ItemUI", "<ButtonRelease-1>", self._item_mouse_up)
+        self.canvas.tag_bind("ItemUI", "<Double-1>", self._item_mouse_doubleclick)
+        self.canvas.tag_bind("ItemUI", "<Button-3>", self._show_item_menu)
 
         self.drawers = None
 
@@ -1946,11 +2024,11 @@ class TaskManager():
     #def _item_is_on_timeline(self, item, timeline):
     #    return item.datetime >= timeline.begin_time and item.datetime <= timeline.end_time
 
-    def delete_selected_items(self):
-        debug('TaskManager.delete_selected_items')
-        self.items.delete_selected_items()
-        self.unselect_items_that_are_selected(redraw_affected_items=False)
-        self.draw()
+    # def delete_selected_items(self):
+    #     debug('TaskManager.delete_selected_items')
+    #     self.items.delete_selected_items()
+    #     self.unselect_items_that_are_selected(redraw_affected_items=False)
+    #     self.draw()
 
     def hide_selected_items(self):
         debug('TaskManager.hide_selected_items')
@@ -2183,9 +2261,11 @@ class TaskManager():
         timeline = self._get_timeline_from_mouse_position()
         if timeline:
             timeline.items.delete_selected_items()
+            self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=timeline)
+        self.draw()
 
         # Todo: At the moment you can delete deleted items, delete should in fact purge here.
-        self.delete_selected_items()
+        #self.delete_selected_items()
 
     def _keypress_escape(self):
         debug('TaskManager._keypress_escape')
@@ -2265,7 +2345,7 @@ class TaskManager():
     def _get_item_key_from_object_id(self, object_id):
         tags = self.canvas.gettags(object_id)
         for tag in tags:
-            if tag.startswith('key='):
+            if tag.startswith('ItemKey='):
                 return tag.split('=')[-1]
 
     def _get_xy(self, x, y, use_object_coords=False):
@@ -2274,7 +2354,7 @@ class TaskManager():
         time = None
         #taskbar_group=self.taskbar.get_group_from_xy(x=x, y=y)
         taskbar_group = None
-        object_id = self._get_closest_object_id_from_xy_with_tag(x, y, 'BaseItem')
+        object_id = self._get_closest_object_id_from_xy_with_tag(x, y, 'ItemUI')
         timeline = self._get_timeline_from_xy(x, y)
         if timeline:
             time = timeline.get_time_from_x(x)
@@ -2284,10 +2364,11 @@ class TaskManager():
                 item = timeline.items.get_by_key(key)
             if use_object_coords:
                 x, y = self.canvas.coords(object_id)[0:2]
-        debug2('_get_xy: {0} {1} {2} {3}'.format(object_id, item, timeline, time))
+        debug('***_get_xy: {} {} {} {} {} {}'.format(x, y, object_id, item, timeline, time))
         return (object_id, item, timeline, time, taskbar_group)
 
     def select_item(self, item, timeline, object_id):
+        debug('*** select_item {} {} {}'.format(item, timeline, object_id))
         # This could end up calling an unselect_all so make sure this line is before the select.
         timeline.items.select(item)
         #debug('*** object_id={}'.format(object_id))
@@ -2302,6 +2383,8 @@ class TaskManager():
 
         if not item:
             return
+
+        debug('*** 0')
 
         self.dragging.allow_drag = True
 
@@ -2339,6 +2422,7 @@ class TaskManager():
             # Space-bar should undelete all selected items.
 
         if self.dragging.allow_drag:
+            debug('*** 7')
             self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self.dragging.item = item
@@ -2410,6 +2494,8 @@ class TaskManager():
         self.mouse = (event.x, event.y)
 
         object_id, item, timeline, time, taskbar_group = self._get_xy(event.x, event.y, use_object_coords=True)
+
+        debug('*** {}, {}, {}'.format(object_id, item, timeline))
 
         if not object_id and timeline:
             return
@@ -2515,7 +2601,7 @@ class TaskManager():
         self.canvas.focus_force()
 
     def _object_is_item(self, object_id):
-        if 'BaseItem' in self.canvas.gettags(object_id):
+        if 'ItemUI' in self.canvas.gettags(object_id):
             return True
         else:
             return False
@@ -2586,7 +2672,9 @@ class TaskManager():
         # Link status box to timelines status box.
         self.statusbox = t.statusbox
 
-        t.items.selected_timeline = t
+        if t.items.selected_timeline != t:
+            self.unselect_items_that_are_selected(redraw_affected_items=True, timeline=t.items.selected_timeline)
+            t.items.selected_timeline = t
 
         if self.keyboard.shift_key_down:
             debug('Shift key is down.')
@@ -2700,13 +2788,12 @@ class TaskManager():
             # Only works if the start and stop of the drag are on the same timeline.
             if t and t.key == self.dragging.timeline.key:
                 # Get a list of all of the objects enclosed by the rectangle.
-                oids = self.canvas.find_enclosed(x, y, x1, y1)
-                for oid in oids:
-                    if 'BaseItem' in self.canvas.gettags(oid):
-                        key = self._get_item_key_from_object_id(oid)
-                        item = t.items.get_by_key(key)
-                        # ToDo: This item selected business is just ugly.
-                        self.select_item(item, t, oid)
+                object_ids = self.canvas.find_enclosed(x, y, x1, y1)
+                for object_id in object_ids:
+                    if 'ItemUI' in self.canvas.gettags(object_id):
+                        item_key = self._get_item_key_from_object_id(object_id)
+                        item = t.items.get_by_key(item_key)
+                        self.select_item(item, t, object_id)
             else:
                 debug('*** t.name != dragging timeline name ***')
         elif self.dragging.timeline:
