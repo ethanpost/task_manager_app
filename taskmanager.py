@@ -577,6 +577,23 @@ class ItemUI():
         self.label_tags = []
         self.item_key = item_key
         self.item_tags = ['ItemUI', 'ItemKey={}'.format(self.item_key)]
+        self.draw_item()
+
+    def select_item(self):
+        self.add_tags_to_item('TAG_SELECTED')
+        self.add_tags_to_label('LABEL_SELECTED')
+        x, y, x1, y1 = self.canvas.coords(self.item_object_id)
+        self.item_selected_id = self.canvas.create_rectangle(
+            x-2,
+            y-2,
+            x1+2,
+            y1+2,
+            fill='',
+            outline=self.outline_color,
+            tags=self.item_tags,
+            stipple=None,
+            width=1,
+            dash=(1, 2))
 
     def draw_item(self):
         self.item_object_id = self.canvas.create_rectangle(
@@ -604,6 +621,9 @@ class ItemUI():
             anchor="w",
             justify="right")
 
+    def draw_selected2(self):
+        self.canvas.itemconfig(self.item_object_id, fill=self.fill_color, dash=(1, 2), width=2, outline='black')
+
     def draw_selected(self):
         x, y, x1, y1 = self.canvas.coords(self.item_object_id)
         self.item_selected_id = self.canvas.create_rectangle(
@@ -618,12 +638,18 @@ class ItemUI():
             width=1,
             dash=(1, 2))
 
-    def add_tag_to_item(self, tag):
-        self.item_tags.append(tag)
+    def add_tags_to_item(self, *tags):
+        for tag in tags:
+            if tag not in self.item_tags:
+                debug('*** tag={} object_id={}'.format(tag, self.item_object_id))
+                self.item_tags.append(tag)
+                self.canvas.addtag_withtag(tag, self.item_object_id)
 
-    def add_tag_to_label(self, tag):
-        self.label_tags.append(tag)
-
+    def add_tags_to_label(self, *tags):
+        for tag in tags:
+            if tag not in self.label_tags:
+                self.label_tags.append(tag)
+                self.canvas.addtag_withtag(tag, self.label_object_id)
 
 class Timeline():
     _timeline_types = ['hourly', 'daily', 'monthly']
@@ -700,6 +726,8 @@ class Timeline():
         self.group_name = group.group_name
 
         self.items = group.items
+        # Dictionary contains a reference to each itemui object which is indexes by the item.key.
+        self.itemsui = {}
 
         self.statusbox = statusbox
         # Initializes a pointer to the timeline type so we can rotate through the various types if required.
@@ -977,13 +1005,16 @@ class Timeline():
         for item in self.items.iter_items_to_draw():
             self.draw_item(item)
 
-    def draw_item(self, item, x=None, y=None, tag=None):
+    def draw_item(self, item, x=None, y=None, tag=None, draw_select_box_only=False):
 
-        debug('***Timeline.draw_item')
+        #debug('***Timeline.draw_item')
 
         # Only draw item if the item.tags contains all of timeline.tags
         # if not set(self.tags).issubset(item.tags):
         #    return
+
+        timeline_item_tag = 'timeline{}_item{}'.format(self.key, item.key)
+        self.canvas.delete(timeline_item_tag)
 
         if self.types[self.type]['move_days'] == 0:
             if item.datetime > self.end_time:
@@ -1002,20 +1033,17 @@ class Timeline():
             item.y = self.y + (self.height * item.y_as_pct_of_height)
 
         itemui = ItemUI(canvas=self.canvas, x=item.x, y=item.y, font=self.font, item_key=item.key)
-        itemui.add_tag_to_item(self.draw_details_tag)
-        itemui.add_tag_to_label(self.draw_details_tag)
+        itemui.draw_label(item.title)
+        # Tags can't be added to label has been drawn.
+        itemui.add_tags_to_item(self.draw_details_tag, timeline_item_tag)
+        itemui.add_tags_to_label(self.draw_details_tag, timeline_item_tag)
 
         if item.selected and self.items.selected_timeline and self.items.selected_timeline.key == self.key:
-            itemui.add_tag_to_label('LABEL_SELECTED')
-            itemui.add_tag_to_item('TAG_SELECTED')
-            itemui.draw_item()
-            itemui.draw_selected()
-        else:
-            itemui.draw_item()
+            itemui.select_item()
 
-        itemui.draw_label(item.title)
 
-        #debug('*** item tags {}'.format(itemui.item_tags))
+
+        self.itemsui[item.key] = itemui
 
     def draw_line_for_current_time(self):
         # Draw blue line at current time. This is disabled during timeline drag events.
@@ -2364,15 +2392,17 @@ class TaskManager():
                 item = timeline.items.get_by_key(key)
             if use_object_coords:
                 x, y = self.canvas.coords(object_id)[0:2]
-        debug('***_get_xy: {} {} {} {} {} {}'.format(x, y, object_id, item, timeline, time))
+        #debug('***_get_xy: {} {} {} {} {} {}'.format(x, y, object_id, item, timeline, time))
         return (object_id, item, timeline, time, taskbar_group)
 
     def select_item(self, item, timeline, object_id):
         debug('*** select_item {} {} {}'.format(item, timeline, object_id))
         # This could end up calling an unselect_all so make sure this line is before the select.
         timeline.items.select(item)
+        timeline.itemsui[item.key].select_item()
         #debug('*** object_id={}'.format(object_id))
-        self.add_tag(object_id=object_id, tag='TAG_SELECTED')
+        #self.add_tag(object_id=object_id, tag='TAG_SELECTED')
+        timeline.items.selected_timeline = timeline
 
     def _item_mouse_down(self, event):
         debug('*** TaskManager._item_mouse_down')
@@ -2388,20 +2418,23 @@ class TaskManager():
 
         self.dragging.allow_drag = True
 
-        timeline.items.selected_timeline = timeline
+        if timeline.items.selected_timeline:
+            if timeline.items.selected_timeline != timeline:
+                debug('*** 9')
+                self.unselect_items_that_are_selected(redraw_affected_items=True,
+                                                      timeline=timeline.items.selected_timeline)
 
         if timeline.items.total_selected == 0:
             debug('*** 1')
             self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected == 1 and not self.keyboard.control_key_down:
             if not item.selected:
-                debug('*** 2')
-                self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=timeline)
-                self.select_item(item, timeline, object_id)
-                self.dragging.allow_drag = False
-            else:
                 debug('*** 3')
-                self.unselect_items_that_are_selected(redraw_affected_items=False, timeline=timeline)
+                self.unselect_items_that_are_selected(redraw_affected_items=True, timeline=timeline)
+                self.select_item(item, timeline, object_id)
+            else:
+                debug('*** 2')
+                self.unselect_items_that_are_selected(redraw_affected_items=True, timeline=timeline)
         elif timeline.items.total_selected >= 1 and self.keyboard.control_key_down:
             self.dragging.allow_drag = False
             if item.selected:
@@ -2412,18 +2445,12 @@ class TaskManager():
                 self.select_item(item, timeline, object_id)
         elif timeline.items.total_selected > 1 and not self.keyboard.control_key_down and not item.selected:
             debug('*** 6')
-            #self.dragging.allow_drag = False
             self.unselect_items_that_are_selected(redraw_affected_items=True, timeline=timeline)
             self.select_item(item, timeline, object_id)
-            #timeline.draw_item(item)
-
-            # Shift-Delete should purge all selected items.
-            # Space-bar should hide or unhide all selected items.
-            # Space-bar should undelete all selected items.
 
         if self.dragging.allow_drag:
             debug('*** 7')
-            self.select_item(item, timeline, object_id)
+            #self.select_item(item, timeline, object_id)
             # Get initial coords for all selected items in the event we need to abort the drag.
             self.dragging.item = item
             self.dragging.object_id = object_id
@@ -2489,7 +2516,7 @@ class TaskManager():
         return timeline
 
     def _item_mouse_up(self, event):
-        debug('TaskManager._item_mouse_up')
+        debug('*** TaskManager._item_mouse_up')
 
         self.mouse = (event.x, event.y)
 
@@ -2498,6 +2525,7 @@ class TaskManager():
         debug('*** {}, {}, {}'.format(object_id, item, timeline))
 
         if not object_id and timeline:
+            debug('*** returning in item mouse up!')
             return
 
         #debug('*** object_id={}'.format(object_id))
@@ -2780,7 +2808,7 @@ class TaskManager():
 
 
     def _timeline_mouse_up(self, event):
-        #debug("TaskManager._timeline_mouse_up")
+        debug("***TaskManager._timeline_mouse_up")
         if self.dragging.is_dragging_selectbox():
             x, y, x1, y1 = self.canvas.coords(self.dragging.selectbox_object_id)
             self.canvas.delete('selectbox')
@@ -2832,6 +2860,7 @@ class TaskManager():
 
         if timeline:
             for item in timeline.items.iter_items_selected():
+                debug('*** redrawing item {}'.format(item))
                 item.selected = False
                 timeline.draw_item(item)
             #timeline.items.unselect_all()
