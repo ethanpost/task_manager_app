@@ -14,12 +14,12 @@ from collections import OrderedDict
 class StatusBox():
     object_type = 'statusbox'
 
-    def __init__(self, root, canvas, font):
+    def __init__(self, root):
         # debug('StatusBox')
 
         self.root = root
-        self.canvas = canvas
-        self.font = font
+        self.canvas = root.canvas
+        self.palette = root.palette
         self._y = 0
         self._height = 18
         self.bottom = None
@@ -60,9 +60,14 @@ class StatusBox():
         # debug('text={}'.format(text))
         self.clear()
         if text:
-            self.object_id = self.canvas.create_text(self.x, self.y, text=text,
-                                                     font=self.font.get_font(),
-                                                     fill="black", anchor="nw", justify="left")
+            self.object_id = self.canvas.create_text(
+                self.x,
+                self.y,
+                text=text,
+                font=self.palette.get_font(),
+                fill="black",
+                anchor="nw",
+                justify="left")
 
     def clear(self):
         # debug2('StatusBox.clear')

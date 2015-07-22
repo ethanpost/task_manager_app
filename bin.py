@@ -241,13 +241,18 @@ def rmdir(directory):
 def application_root_path():
     return os.path.dirname(os.path.realpath(__file__))
 
-
 def application_root_folder():
     return os.path.dirname(os.path.realpath(__file__))
 
+def application_root_dir():
+    return os.path.dirname(os.path.realpath(__file__))
 
 def random_string(length=10):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(length))
+
+
+def random_integer(start, end):
+    return random.randint(start, end)
 
 
 def open_database(
@@ -366,3 +371,11 @@ def save_dict(dict_name, dict_object, directory=None):
     d = shelve.open(file_name, writeback=True)
     d[dict_name] = dict_object
     d.close()
+
+
+def canvas_get_closest_object_id_withtag(*, canvas, x, y, tag):
+    object_id = canvas.find_closest(x, y, start=None)[0]
+    if tag in canvas.gettags(object_id):
+        return object_id
+    else:
+        return None

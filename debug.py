@@ -3,6 +3,7 @@ __author__ = 'Ethan_Post'
 debug_list = None
 buffered = False
 debug_level = 1
+line_number = 0
 
 # ToDo: Implement sanelog here.
 
@@ -47,6 +48,7 @@ def debug(text):
         return
     global debug_list
     global debug_level
+    global line_number
     if debug_level >= 1:
         if buffered:
             if not debug_list:
@@ -54,7 +56,8 @@ def debug(text):
             del debug_list[0]
             debug_list.append(str(text))
         else:
-            print(text)
+            line_number += 1
+            print('{}: {}'.format(line_number, text))
 
 
 def dump():
